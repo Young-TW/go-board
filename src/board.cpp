@@ -3,9 +3,7 @@
 #include <iostream>
 #include <vector>
 
-Board::Board() {
-    point.resize(19, std::vector<int>(19));
-}
+Board::Board() { point.resize(19, std::vector<int>(19)); }
 
 int Board::set(int x, int y, int status) {
     point[x][y] = status;
@@ -13,8 +11,8 @@ int Board::set(int x, int y, int status) {
 }
 
 int Board::print() {
-    for (int x=0;x<19;x++) {
-        for (int y=0;y<19;y++) {
+    for (int x = 0; x < 19; x++) {
+        for (int y = 0; y < 19; y++) {
             std::cout << point[x][y];
         }
 
@@ -28,6 +26,4 @@ int Board::calculate() {
     return ans;
 }
 
-Board::~Board() {
-
-}
+Board::~Board() {}

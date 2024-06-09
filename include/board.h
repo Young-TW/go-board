@@ -4,18 +4,18 @@
 #include <vector>
 
 class Board {
-    public:
-        Board();
-        int set(int x, int y, int status);
-        int print();
-        int calculate();
-        ~Board();
+public:
+    Board();
+    int set(int x, int y, int status);
+    int print();
+    int calculate();
+    ~Board();
 
-        int rotation = 0;
-        int gamestatus = 0;
+    int rotation = 0;
+    int gamestatus = 0;
 
-    private:
-        std::vector<std::vector<int>> point;
+private:
+    std::vector<std::vector<int>> point;
 };
 
 #endif
