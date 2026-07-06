@@ -68,6 +68,13 @@ uv run python -m train.train --board-size 9 --iterations 50
 Checkpoints land in `checkpoints/` (gitignored); resume with
 `--resume checkpoints/iter_0049.pt`.
 
+Compare two checkpoints head-to-head, or play against one yourself:
+
+```bash
+uv run python -m train.arena checkpoints/iter_0059.pt checkpoints/iter_0019.pt
+uv run python -m train.play checkpoints/iter_0059.pt --human black
+```
+
 ## Test
 
 ```bash
