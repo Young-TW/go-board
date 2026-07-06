@@ -49,9 +49,10 @@ class MCTS:
     def run(self, board: Board, to_play: Stone, simulations: int,
             add_noise: bool = False) -> Node:
         root = Node(0.0)
-        self._expand(root, board, to_play)
+        priors, value = self.evaluate(board, to_play)
+        self.expand(root, board, to_play, priors, value)
         if add_noise:
-            self._add_dirichlet_noise(root)
+            self.add_dirichlet_noise(root)
         for _ in range(simulations):
             self._simulate(root, board.copy(), to_play)
         return root
@@ -74,6 +75,17 @@ class MCTS:
         return int(self.rng.choice(len(pi), p=pi))
 
     def _simulate(self, root: Node, board: Board, to_play: Stone) -> None:
+        path, board, color = self.descend(root, board, to_play)
+        if board.is_terminal():
+            value = terminal_value(board, color)
+        else:
+            priors, value = self.evaluate(board, color)
+            value = self.expand(path[-1], board, color, priors, value)
+        self.backprop(path, value)
+
+    def descend(self, root: Node, board: Board,
+                to_play: Stone) -> tuple[list[Node], Board, Stone]:
+        """Walk to a leaf, mutating `board` along the way."""
         node = root
         color = to_play
         path = [root]
@@ -82,14 +94,11 @@ class MCTS:
             apply_move(board, move, color)
             color = goboard.opponent(color)
             path.append(node)
+        return path, board, color
 
-        if board.is_terminal():
-            value = terminal_value(board, color)
-        else:
-            value = self._expand(node, board, color)
-
-        # `value` is from the perspective of the player to move at the
-        # leaf; the sign flips at every step back up.
+    def backprop(self, path: list[Node], value: float) -> None:
+        """`value` is from the perspective of the player to move at the
+        leaf; the sign flips at every step back up."""
         for node in reversed(path):
             node.visits += 1
             node.value_sum += value
@@ -107,8 +116,8 @@ class MCTS:
                 best = (move, child)
         return best
 
-    def _expand(self, node: Node, board: Board, to_play: Stone) -> float:
-        priors, value = self.evaluate(board, to_play)
+    def expand(self, node: Node, board: Board, to_play: Stone,
+               priors: np.ndarray, value: float) -> float:
         pass_move = board.size * board.size
         legal = board.legal_moves(to_play) + [pass_move]
 
@@ -122,7 +131,7 @@ class MCTS:
             node.children[move] = Node(float(prior))
         return float(value)
 
-    def _add_dirichlet_noise(self, root: Node) -> None:
+    def add_dirichlet_noise(self, root: Node) -> None:
         moves = list(root.children)
         noise = self.rng.dirichlet([self.dirichlet_alpha] * len(moves))
         for move, eta in zip(moves, noise):

@@ -20,12 +20,18 @@ class NetEvaluator:
         self.net = net.to(self.device).eval()
 
     def __call__(self, board: Board, to_play: Stone):
-        planes = board.features(to_play)[None]  # add batch dim
+        probs, values = self.evaluate_batch([(board, to_play)])
+        return probs[0], float(values[0])
+
+    def evaluate_batch(self, positions):
+        """Evaluate [(board, to_play), ...] in one forward pass."""
+        planes = np.stack(
+            [board.features(to_play) for board, to_play in positions])
         x = torch.from_numpy(planes).to(self.device)
         with torch.no_grad():
-            logits, value = self.net(x)
-        probs = torch.softmax(logits[0], dim=0).cpu().numpy()
-        return probs, float(value.item())
+            logits, values = self.net(x)
+        probs = torch.softmax(logits, dim=1).cpu().numpy()
+        return probs, values.cpu().numpy()
 
 
 @dataclass

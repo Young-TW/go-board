@@ -13,8 +13,9 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
+from train.batchplay import play_games
 from train.net import PolicyValueNet, default_device
-from train.selfplay import NetEvaluator, play_game, symmetries
+from train.selfplay import NetEvaluator, symmetries
 
 
 def parse_args() -> argparse.Namespace:
@@ -94,15 +95,14 @@ def main() -> None:
     for iteration in range(start_iter, args.iterations):
         start = time.time()
         evaluator = NetEvaluator(net, device)
-        black_wins = 0
-        moves = 0
-        for _ in range(args.games_per_iter):
-            samples, black_margin = play_game(
-                evaluator, board_size=args.board_size, komi=args.komi,
-                simulations=args.simulations,
-                temperature_moves=args.temperature_moves, rng=rng)
-            black_wins += black_margin > 0
-            moves += len(samples)
+        game_samples, margins = play_games(
+            evaluator.evaluate_batch, args.games_per_iter,
+            board_size=args.board_size, komi=args.komi,
+            simulations=args.simulations,
+            temperature_moves=args.temperature_moves, rng=rng)
+        black_wins = sum(margin > 0 for margin in margins)
+        moves = sum(len(samples) for samples in game_samples)
+        for samples in game_samples:
             for sample in samples:
                 for planes, pi in symmetries(sample.planes, sample.pi,
                                              args.board_size):
