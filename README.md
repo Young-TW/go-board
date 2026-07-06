@@ -23,6 +23,29 @@ This produces the `go-board` terminal client and a `go_board_core`
 static library that other programs (e.g. Python bindings for a
 training loop) can link against.
 
+## Python bindings
+
+Build with pybind11 (needs `pybind11` and, for `features()`, `numpy`):
+
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DGO_BOARD_PYTHON=ON
+cmake --build build
+PYTHONPATH=build python
+```
+
+```python
+import goboard
+from goboard import Board, Stone
+
+board = Board(size=9, komi=7.5)
+board.play(2, 3, Stone.BLACK)
+board.legal_moves(Stone.WHITE)     # flattened indices
+board.features(Stone.WHITE)        # float32 ndarray, shape (3, 9, 9)
+board.pass_()                      # 'pass' is a Python keyword
+board.is_terminal(); board.score(); board.hash()
+print(board)
+```
+
 ## Test
 
 ```bash
