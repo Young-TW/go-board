@@ -11,7 +11,7 @@ Stone opponent(Stone color);
 
 class Board {
 public:
-    explicit Board(int size = 19);
+    explicit Board(int size = 19, float komi = 7.5f);
 
     int size() const { return size_; }
     bool in_bounds(int x, int y) const;
@@ -25,6 +25,18 @@ public:
 
     std::uint64_t hash() const { return hash_; }
 
+    void pass();
+    // The game ends after two consecutive passes.
+    bool is_terminal() const { return consecutive_passes_ >= 2; }
+
+    // Tromp-Taylor score from black's perspective, komi included:
+    // stones plus empty regions bordering a single colour only.
+    float score() const;
+
+    // Flattened indices (y * size + x) of all legal moves; pass is
+    // always available and not included.
+    std::vector<int> legal_moves(Stone color) const;
+
     void print() const;
 
 private:
@@ -36,6 +48,8 @@ private:
     void remove_chain(const std::vector<int>& stones);
 
     int size_;
+    float komi_;
+    int consecutive_passes_ = 0;
     std::vector<Stone> point_;
     std::uint64_t hash_ = 0;
     std::unordered_set<std::uint64_t> history_;

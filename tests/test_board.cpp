@@ -115,6 +115,50 @@ static void test_ko_recapture_forbidden() {
     CHECK(board.play(5, 5, B));
 }
 
+static void test_two_passes_end_the_game() {
+    Board board(9);
+    CHECK(!board.is_terminal());
+    board.pass();
+    CHECK(!board.is_terminal());
+    board.play(4, 4, W);  // a move resets consecutive passes
+    board.pass();
+    CHECK(!board.is_terminal());
+    board.pass();
+    CHECK(board.is_terminal());
+}
+
+static void test_score_empty_board_is_neutral() {
+    Board board(9, 7.5f);
+    // An empty region touching no stones belongs to nobody.
+    CHECK(board.score() == -7.5f);
+}
+
+static void test_score_single_stone_owns_everything() {
+    Board board(9, 7.5f);
+    board.play(4, 4, B);
+    CHECK(board.score() == 81.0f - 7.5f);
+}
+
+static void test_score_divided_board() {
+    Board board(5, 7.5f);
+    // Black wall on column x=2 splits the board; the left region is
+    // black territory, the right one touches both colours (neutral).
+    for (int y = 0; y < 5; y++) board.play(2, y, B);
+    board.play(4, 2, W);
+    // black: 5 stones + 10 points territory; white: 1 stone.
+    CHECK(board.score() == 15.0f - 1.0f - 7.5f);
+}
+
+static void test_legal_moves() {
+    Board board(5);
+    CHECK(board.legal_moves(B).size() == 25);
+    board.play(1, 0, W);
+    board.play(0, 1, W);
+    // (0,0) is now suicide for black but still legal for white.
+    CHECK(board.legal_moves(B).size() == 22);
+    CHECK(board.legal_moves(W).size() == 23);
+}
+
 static void test_hash_updates_and_restores() {
     Board board(9);
     const std::uint64_t empty_hash = board.hash();
@@ -138,6 +182,11 @@ int main() {
     test_is_legal_does_not_mutate();
     test_ko_recapture_forbidden();
     test_hash_updates_and_restores();
+    test_two_passes_end_the_game();
+    test_score_empty_board_is_neutral();
+    test_score_single_stone_owns_everything();
+    test_score_divided_board();
+    test_legal_moves();
 
     if (failures == 0) {
         std::cout << "all tests passed\n";

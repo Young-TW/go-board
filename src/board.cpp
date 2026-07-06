@@ -34,7 +34,8 @@ Stone opponent(Stone color) {
     return color == Stone::Black ? Stone::White : Stone::Black;
 }
 
-Board::Board(int size) : size_(size), point_(size * size, Stone::Empty) {
+Board::Board(int size, float komi)
+    : size_(size), komi_(komi), point_(size * size, Stone::Empty) {
     if (size < 2 || size > 19) {
         throw std::invalid_argument("board size must be between 2 and 19");
     }
@@ -130,7 +131,63 @@ bool Board::play(int x, int y, Stone color) {
 
     hash_ = new_hash;
     history_.insert(new_hash);
+    consecutive_passes_ = 0;
     return true;
+}
+
+void Board::pass() { consecutive_passes_++; }
+
+float Board::score() const {
+    int black = 0;
+    int white = 0;
+    std::vector<char> visited(point_.size(), 0);
+    std::vector<int> region;
+
+    for (int start = 0; start < static_cast<int>(point_.size()); start++) {
+        if (point_[start] == Stone::Black) {
+            black++;
+        } else if (point_[start] == Stone::White) {
+            white++;
+        } else if (!visited[start]) {
+            // Flood-fill the empty region and note which colours it touches.
+            region.clear();
+            region.push_back(start);
+            visited[start] = 1;
+            bool touches_black = false;
+            bool touches_white = false;
+            for (std::size_t i = 0; i < region.size(); i++) {
+                int nbr[4];
+                const int count = neighbors(region[i], nbr);
+                for (int n = 0; n < count; n++) {
+                    const int next = nbr[n];
+                    if (point_[next] == Stone::Black) {
+                        touches_black = true;
+                    } else if (point_[next] == Stone::White) {
+                        touches_white = true;
+                    } else if (!visited[next]) {
+                        visited[next] = 1;
+                        region.push_back(next);
+                    }
+                }
+            }
+            if (touches_black && !touches_white) {
+                black += region.size();
+            } else if (touches_white && !touches_black) {
+                white += region.size();
+            }
+        }
+    }
+    return static_cast<float>(black - white) - komi_;
+}
+
+std::vector<int> Board::legal_moves(Stone color) const {
+    std::vector<int> moves;
+    for (int y = 0; y < size_; y++) {
+        for (int x = 0; x < size_; x++) {
+            if (is_legal(x, y, color)) moves.push_back(index(x, y));
+        }
+    }
+    return moves;
 }
 
 bool Board::is_legal(int x, int y, Stone color) const {
