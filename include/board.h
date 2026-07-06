@@ -1,21 +1,39 @@
-#ifndef Board_H
-#define Board_H
+#ifndef GO_BOARD_BOARD_H
+#define GO_BOARD_BOARD_H
 
+#include <cstdint>
 #include <vector>
+
+enum class Stone : std::int8_t { Empty = 0, Black = 1, White = 2 };
+
+Stone opponent(Stone color);
 
 class Board {
 public:
-    Board();
-    int set(int x, int y, int status);
-    int print();
-    int calculate();
-    ~Board();
+    explicit Board(int size = 19);
 
-    int rotation = 0;
-    int gamestatus = 0;
+    int size() const { return size_; }
+    bool in_bounds(int x, int y) const;
+    Stone at(int x, int y) const;
+
+    // Places a stone and resolves captures. Returns false and leaves the
+    // board unchanged if the move is out of bounds, on an occupied point,
+    // or suicide.
+    bool play(int x, int y, Stone color);
+    bool is_legal(int x, int y, Stone color) const;
+
+    void print() const;
 
 private:
-    std::vector<std::vector<int>> point;
+    int index(int x, int y) const { return y * size_ + x; }
+    int neighbors(int idx, int out[4]) const;
+    // Flood-fills the chain containing idx into `stones`, returns its
+    // number of distinct liberties.
+    int chain_liberties(int idx, std::vector<int>& stones) const;
+    void remove_chain(const std::vector<int>& stones);
+
+    int size_;
+    std::vector<Stone> point_;
 };
 
 #endif

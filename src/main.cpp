@@ -1,60 +1,34 @@
 #include <iostream>
-#include <vector>
+#include <string>
 
 #include "board.h"
 
-template <class T>
-void print_vector(std::vector<T> vec) {
-    for (int i = 0; i < vec.size(); i++) {
-        std::cout << " " << vec[i];
-    }
-}
-
-template <class T>
-std::vector<T> bubble(std::vector<T> v) {
-    int reg;
-    for (int i = 0; i < v.size(); i++) {
-        for (int j = v.size(); j >= 0; j--) {
-            if (v[j] < v[j + 1]) {
-                reg = v[j];
-                v[j] = v[j + 1];
-                v[j + 1] = reg;
-            }
-        }
-    }
-
-    return v;
-}
-
-enum go_point { black, white };
-
 int main() {
-    // const std::vector<int> v = {2, 1, 4, 3, 5, 9, 7, 6, 8, 0, 11, 19, 256,
-    // 128, 1024};
+    Board board(19);
+    Stone to_play = Stone::Black;
 
-    // print_vector(bubble(v));
-    Board board;
+    board.print();
+    std::cout << "enter moves as \"x y\" (1-based), or \"quit\"\n";
 
-    int x, y;
-    while (board.gamestatus != 2) {
-        std::cin >> x >> y;
+    std::string token;
+    while (std::cin >> token) {
+        if (token == "quit") break;
 
-        if (x == 99 || y == 99) {
-            board.gamestatus == 1;
+        int x, y;
+        try {
+            x = std::stoi(token);
+        } catch (const std::exception&) {
+            std::cout << "unknown command\n";
+            continue;
         }
+        if (!(std::cin >> y)) break;
 
-        if (x == 100 || y == 100) {
-            board.gamestatus = 2;
+        if (!board.play(x - 1, y - 1, to_play)) {
+            std::cout << "illegal move\n";
+            continue;
         }
-
-        x--;
-        y--;
-
-        board.set(x, y, board.rotation % 2 + 1);
+        to_play = opponent(to_play);
         board.print();
-        board.rotation++;
     }
-
-    board.~Board();
     return 0;
 }
