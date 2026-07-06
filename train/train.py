@@ -78,16 +78,21 @@ def main() -> None:
     torch.manual_seed(args.seed)
 
     net = PolicyValueNet(args.board_size, args.channels, args.blocks)
-    optimizer = torch.optim.AdamW(net.parameters(), lr=args.lr,
-                                  weight_decay=args.weight_decay)
     start_iter = 0
+    state = None
     if args.resume is not None:
         state = torch.load(args.resume, map_location="cpu", weights_only=True)
         net.load_state_dict(state["model"])
-        optimizer.load_state_dict(state["optimizer"])
         start_iter = state["iteration"] + 1
-        print(f"resumed from {args.resume} at iteration {start_iter}")
     net.to(device)
+    # Create the optimizer only once the model is on its device, so a
+    # resumed optimizer state is cast onto the parameters' device too.
+    optimizer = torch.optim.AdamW(net.parameters(), lr=args.lr,
+                                  weight_decay=args.weight_decay)
+    if state is not None:
+        optimizer.load_state_dict(state["optimizer"])
+        print(f"resumed from {args.resume} at iteration {start_iter}",
+              flush=True)
 
     buffer: deque = deque(maxlen=args.buffer_size)
     args.checkpoint_dir.mkdir(parents=True, exist_ok=True)
