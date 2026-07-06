@@ -1,7 +1,7 @@
 # go-board
 
-A Go (圍棋) rules engine in C++, intended as the game-logic core for
-self-play training (AlphaZero-style) and as a simple terminal client.
+A Go (圍棋) rules engine in C++ with an AlphaZero-style self-play
+training stack (PyTorch + MCTS) on top, plus a simple terminal client.
 
 ## Rules implemented
 
@@ -25,13 +25,20 @@ training loop) can link against.
 
 ## Python bindings
 
-Build with pybind11 (needs `pybind11` and, for `features()`, `numpy`):
+The recommended path is uv + scikit-build-core, which builds the
+`goboard` extension automatically:
 
 ```bash
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DGO_BOARD_PYTHON=ON
-cmake --build build
-PYTHONPATH=build python
+uv sync          # builds and installs goboard into .venv
+uv run python -c "import goboard"
 ```
+
+After changing C++ sources, rebuild with
+`uv sync --reinstall-package goboard`.
+
+Manual CMake build also works
+(`cmake -B build -DGO_BOARD_PYTHON=ON`, module lands in `build/`,
+use with `PYTHONPATH=build`).
 
 ```python
 import goboard
@@ -46,10 +53,26 @@ board.is_terminal(); board.score(); board.hash()
 print(board)
 ```
 
+## Training (AlphaZero-style)
+
+`train/` contains the self-play stack: `net.py` (policy/value ResNet),
+`mcts.py` (PUCT search), `selfplay.py` (game generation + symmetry
+augmentation), `train.py` (the loop). torch comes from the ROCm wheel
+index via the `train` dependency group:
+
+```bash
+uv sync --group train
+uv run python -m train.train --board-size 9 --iterations 50
+```
+
+Checkpoints land in `checkpoints/` (gitignored); resume with
+`--resume checkpoints/iter_0049.pt`.
+
 ## Test
 
 ```bash
-ctest --test-dir build --output-on-failure
+ctest --test-dir build --output-on-failure   # C++ + bindings
+uv run pytest                                # Python training stack
 ```
 
 ## Play in the terminal

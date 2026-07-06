@@ -6,6 +6,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(GO_BOARD_PYTHON "Build the goboard Python module" OFF)
+if(SKBUILD)
+    set(GO_BOARD_PYTHON ON)
+endif()
 
 add_library(go_board_core STATIC src/board.cpp)
 target_include_directories(go_board_core PUBLIC include)
@@ -30,4 +33,8 @@ if(GO_BOARD_PYTHON)
                      ${CMAKE_CURRENT_SOURCE_DIR}/python/test_goboard.py)
     set_tests_properties(python_bindings PROPERTIES
         ENVIRONMENT "PYTHONPATH=$<TARGET_FILE_DIR:goboard>")
+
+    if(SKBUILD)
+        install(TARGETS goboard LIBRARY DESTINATION .)
+    endif()
 endif()

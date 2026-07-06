@@ -1,0 +1,39 @@
+[build-system]
+requires = ["scikit-build-core>=0.11", "pybind11>=3"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "goboard"
+version = "0.1.0"
+description = "Go rules engine with AlphaZero-style self-play training"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = ["numpy>=2"]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+train = [
+    "torch>=2.10.0",
+    # torch's ROCm wheels depend on triton-rocm, which only exists on
+    # the ROCm index; declare it directly so tool.uv.sources applies.
+    "triton-rocm>=3.6; sys_platform == 'linux'",
+]
+
+[tool.scikit-build]
+cmake.version = ">=3.16"
+
+[tool.scikit-build.cmake.define]
+GO_BOARD_PYTHON = "ON"
+
+[tool.pytest.ini_options]
+testpaths = ["train"]
+
+# torch comes from the ROCm index (same setup as verified in MNIST).
+[[tool.uv.index]]
+name = "pytorch-rocm"
+url = "https://download.pytorch.org/whl/rocm7.1"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-rocm" }]
+triton-rocm = [{ index = "pytorch-rocm" }]
