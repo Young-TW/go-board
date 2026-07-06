@@ -34,6 +34,8 @@ PYBIND11_MODULE(goboard, m) {
         // 'pass' is a Python keyword, hence the trailing underscore.
         .def("pass_", &Board::pass)
         .def("is_terminal", &Board::is_terminal)
+        .def("copy", [](const Board& board) { return Board(board); },
+             "Deep copy, including position history.")
         .def("score", &Board::score)
         .def("hash", &Board::hash)
         .def(
