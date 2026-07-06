@@ -207,9 +207,53 @@ std::vector<float> Board::features(Stone to_play) const {
     return planes;
 }
 
+// Mirrors play() without mutating: cheap enough to call for every
+// point when generating legal moves (no board/history copy).
 bool Board::is_legal(int x, int y, Stone color) const {
-    Board copy(*this);
-    return copy.play(x, y, color);
+    if (color == Stone::Empty || !in_bounds(x, y)) return false;
+    const int idx = index(x, y);
+    if (point_[idx] != Stone::Empty) return false;
+
+    const Stone enemy = opponent(color);
+    std::uint64_t new_hash = hash_ ^ stone_key(idx, color);
+
+    // An adjacent enemy chain is captured iff its single liberty is
+    // this point (idx is empty and adjacent, so at one liberty it is
+    // exactly idx). `seen` avoids re-flooding a chain reachable via
+    // two neighbors, which would corrupt the hash.
+    bool captures = false;
+    std::vector<char> seen(point_.size(), 0);
+    std::vector<int> chain;
+    int nbr[4];
+    const int count = neighbors(idx, nbr);
+    for (int n = 0; n < count; n++) {
+        const int next = nbr[n];
+        if (point_[next] != enemy || seen[next]) continue;
+        const bool dead = chain_liberties(next, chain) == 1;
+        for (int c : chain) {
+            seen[c] = 1;
+            if (dead) new_hash ^= stone_key(c, enemy);
+        }
+        captures |= dead;
+    }
+
+    if (!captures) {
+        // Suicide unless the stone keeps a liberty: an empty neighbor,
+        // or a friendly chain with a liberty besides this point.
+        bool has_liberty = false;
+        for (int n = 0; n < count && !has_liberty; n++) {
+            const int next = nbr[n];
+            if (point_[next] == Stone::Empty) {
+                has_liberty = true;
+            } else if (point_[next] == color && !seen[next]) {
+                if (chain_liberties(next, chain) >= 2) has_liberty = true;
+                for (int c : chain) seen[c] = 1;
+            }
+        }
+        if (!has_liberty) return false;
+    }
+
+    return !history_.contains(new_hash);
 }
 
 std::string Board::to_string() const {

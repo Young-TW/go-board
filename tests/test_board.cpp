@@ -1,4 +1,5 @@
 #include <iostream>
+#include <random>
 
 #include "board.h"
 
@@ -171,6 +172,32 @@ static void test_hash_updates_and_restores() {
     CHECK(board.hash() == before);
 }
 
+static void test_is_legal_matches_play_on_random_games() {
+    std::mt19937 rng(42);
+    int mismatches = 0;
+    for (int game = 0; game < 5; game++) {
+        Board board(7);
+        Stone to_play = B;
+        for (int move = 0; move < 120; move++) {
+            for (int y = 0; y < 7; y++) {
+                for (int x = 0; x < 7; x++) {
+                    Board copy(board);
+                    if (board.is_legal(x, y, to_play) !=
+                        copy.play(x, y, to_play)) {
+                        mismatches++;
+                    }
+                }
+            }
+            const auto moves = board.legal_moves(to_play);
+            if (moves.empty()) break;
+            const int m = moves[rng() % moves.size()];
+            board.play(m % 7, m / 7, to_play);
+            to_play = opponent(to_play);
+        }
+    }
+    CHECK(mismatches == 0);
+}
+
 static void test_features_planes() {
     Board board(5);
     board.play(1, 1, B);
@@ -206,6 +233,7 @@ int main() {
     test_score_single_stone_owns_everything();
     test_score_divided_board();
     test_legal_moves();
+    test_is_legal_matches_play_on_random_games();
     test_features_planes();
 
     if (failures == 0) {
