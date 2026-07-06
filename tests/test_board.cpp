@@ -92,6 +92,41 @@ static void test_is_legal_does_not_mutate() {
     CHECK(board.at(1, 0) == W);
 }
 
+static void test_ko_recapture_forbidden() {
+    Board board(9);
+    // Classic ko: black surrounds (1,1), white surrounds (2,1).
+    board.play(1, 0, B);
+    board.play(0, 1, B);
+    board.play(1, 2, B);
+    board.play(2, 1, B);
+    board.play(2, 0, W);
+    board.play(3, 1, W);
+    board.play(2, 2, W);
+
+    CHECK(board.play(1, 1, W));  // takes the ko, captures B(2,1)
+    CHECK(board.at(2, 1) == Stone::Empty);
+
+    // Immediate recapture would recreate the previous position.
+    CHECK(!board.play(2, 1, B));
+    CHECK(board.at(1, 1) == W);
+    CHECK(board.at(2, 1) == Stone::Empty);
+
+    // The board is still playable elsewhere.
+    CHECK(board.play(5, 5, B));
+}
+
+static void test_hash_updates_and_restores() {
+    Board board(9);
+    const std::uint64_t empty_hash = board.hash();
+    board.play(3, 3, B);
+    CHECK(board.hash() != empty_hash);
+
+    // An illegal move must leave the hash untouched.
+    const std::uint64_t before = board.hash();
+    CHECK(!board.play(3, 3, W));
+    CHECK(board.hash() == before);
+}
+
 int main() {
     test_place_and_at();
     test_occupied_rejected();
@@ -101,6 +136,8 @@ int main() {
     test_suicide_rejected();
     test_capture_is_not_suicide();
     test_is_legal_does_not_mutate();
+    test_ko_recapture_forbidden();
+    test_hash_updates_and_restores();
 
     if (failures == 0) {
         std::cout << "all tests passed\n";

@@ -1,7 +1,34 @@
 #include "board.h"
 
+#include <array>
 #include <iostream>
+#include <random>
 #include <stdexcept>
+
+namespace {
+
+constexpr int kMaxPoints = 19 * 19;
+
+// One random key per (point, color); a position's hash is the XOR of the
+// keys of its stones, so it can be updated incrementally on place/remove.
+const std::array<std::array<std::uint64_t, 2>, kMaxPoints>& zobrist() {
+    static const auto table = [] {
+        std::array<std::array<std::uint64_t, 2>, kMaxPoints> t;
+        std::mt19937_64 rng(0x9E3779B97F4A7C15ULL);
+        for (auto& keys : t) {
+            keys[0] = rng();
+            keys[1] = rng();
+        }
+        return t;
+    }();
+    return table;
+}
+
+std::uint64_t stone_key(int idx, Stone color) {
+    return zobrist()[idx][color == Stone::Black ? 0 : 1];
+}
+
+}  // namespace
 
 Stone opponent(Stone color) {
     return color == Stone::Black ? Stone::White : Stone::Black;
@@ -11,6 +38,7 @@ Board::Board(int size) : size_(size), point_(size * size, Stone::Empty) {
     if (size < 2 || size > 19) {
         throw std::invalid_argument("board size must be between 2 and 19");
     }
+    history_.insert(hash_);
 }
 
 bool Board::in_bounds(int x, int y) const {
@@ -72,7 +100,7 @@ bool Board::play(int x, int y, Stone color) {
 
     // Capture adjacent opponent chains left without liberties.
     const Stone enemy = opponent(color);
-    bool captured = false;
+    std::vector<int> captured;
     std::vector<int> chain;
     int nbr[4];
     const int count = neighbors(idx, nbr);
@@ -80,16 +108,28 @@ bool Board::play(int x, int y, Stone color) {
         if (point_[nbr[n]] != enemy) continue;
         if (chain_liberties(nbr[n], chain) == 0) {
             remove_chain(chain);
-            captured = true;
+            captured.insert(captured.end(), chain.begin(), chain.end());
         }
     }
 
     // A move that captures always gains a liberty, so suicide can only
     // happen when nothing was captured.
-    if (!captured && chain_liberties(idx, chain) == 0) {
+    if (captured.empty() && chain_liberties(idx, chain) == 0) {
         point_[idx] = Stone::Empty;
         return false;
     }
+
+    // Positional superko: reject any move recreating a previous position.
+    std::uint64_t new_hash = hash_ ^ stone_key(idx, color);
+    for (int c : captured) new_hash ^= stone_key(c, enemy);
+    if (history_.contains(new_hash)) {
+        for (int c : captured) point_[c] = enemy;
+        point_[idx] = Stone::Empty;
+        return false;
+    }
+
+    hash_ = new_hash;
+    history_.insert(new_hash);
     return true;
 }
 

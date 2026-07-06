@@ -2,6 +2,7 @@
 #define GO_BOARD_BOARD_H
 
 #include <cstdint>
+#include <unordered_set>
 #include <vector>
 
 enum class Stone : std::int8_t { Empty = 0, Black = 1, White = 2 };
@@ -18,9 +19,11 @@ public:
 
     // Places a stone and resolves captures. Returns false and leaves the
     // board unchanged if the move is out of bounds, on an occupied point,
-    // or suicide.
+    // suicide, or recreates a previous position (positional superko).
     bool play(int x, int y, Stone color);
     bool is_legal(int x, int y, Stone color) const;
+
+    std::uint64_t hash() const { return hash_; }
 
     void print() const;
 
@@ -34,6 +37,8 @@ private:
 
     int size_;
     std::vector<Stone> point_;
+    std::uint64_t hash_ = 0;
+    std::unordered_set<std::uint64_t> history_;
 };
 
 #endif
