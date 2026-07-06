@@ -2,6 +2,7 @@
 #define GO_BOARD_BOARD_H
 
 #include <cstdint>
+#include <string>
 #include <unordered_set>
 #include <vector>
 
@@ -36,6 +37,13 @@ public:
     // Flattened indices (y * size + x) of all legal moves; pass is
     // always available and not included.
     std::vector<int> legal_moves(Stone color) const;
+
+    // Neural-net input: 3 planes of size*size floats, plane-major.
+    // Plane 0: stones of to_play, plane 1: opponent stones,
+    // plane 2: constant 1.0 if to_play is black, else 0.0.
+    std::vector<float> features(Stone to_play) const;
+
+    std::string to_string() const;
 
     void print() const;
 

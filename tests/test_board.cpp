@@ -171,6 +171,25 @@ static void test_hash_updates_and_restores() {
     CHECK(board.hash() == before);
 }
 
+static void test_features_planes() {
+    Board board(5);
+    board.play(1, 1, B);
+    board.play(3, 3, W);
+    const int points = 5 * 5;
+
+    const auto black_view = board.features(B);
+    CHECK(black_view.size() == 3u * points);
+    CHECK(black_view[1 * 5 + 1] == 1.0f);           // own stone
+    CHECK(black_view[points + 3 * 5 + 3] == 1.0f);  // opponent stone
+    CHECK(black_view[3 * 5 + 3] == 0.0f);
+    CHECK(black_view[2 * points] == 1.0f);  // black-to-play plane
+
+    const auto white_view = board.features(W);
+    CHECK(white_view[3 * 5 + 3] == 1.0f);           // own stone
+    CHECK(white_view[points + 1 * 5 + 1] == 1.0f);  // opponent stone
+    CHECK(white_view[2 * points] == 0.0f);  // white to play
+}
+
 int main() {
     test_place_and_at();
     test_occupied_rejected();
@@ -187,6 +206,7 @@ int main() {
     test_score_single_stone_owns_everything();
     test_score_divided_board();
     test_legal_moves();
+    test_features_planes();
 
     if (failures == 0) {
         std::cout << "all tests passed\n";

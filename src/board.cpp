@@ -190,20 +190,42 @@ std::vector<int> Board::legal_moves(Stone color) const {
     return moves;
 }
 
+std::vector<float> Board::features(Stone to_play) const {
+    const int points = size_ * size_;
+    const Stone enemy = opponent(to_play);
+    std::vector<float> planes(3 * points, 0.0f);
+    for (int i = 0; i < points; i++) {
+        if (point_[i] == to_play) {
+            planes[i] = 1.0f;
+        } else if (point_[i] == enemy) {
+            planes[points + i] = 1.0f;
+        }
+    }
+    if (to_play == Stone::Black) {
+        for (int i = 0; i < points; i++) planes[2 * points + i] = 1.0f;
+    }
+    return planes;
+}
+
 bool Board::is_legal(int x, int y, Stone color) const {
     Board copy(*this);
     return copy.play(x, y, color);
 }
 
-void Board::print() const {
+std::string Board::to_string() const {
+    std::string out;
+    out.reserve((size_ * 2 + 1) * size_);
     for (int y = 0; y < size_; y++) {
         for (int x = 0; x < size_; x++) {
             switch (at(x, y)) {
-                case Stone::Black: std::cout << "X "; break;
-                case Stone::White: std::cout << "O "; break;
-                default: std::cout << ". "; break;
+                case Stone::Black: out += "X "; break;
+                case Stone::White: out += "O "; break;
+                default: out += ". "; break;
             }
         }
-        std::cout << "\n";
+        out += "\n";
     }
+    return out;
 }
+
+void Board::print() const { std::cout << to_string(); }
