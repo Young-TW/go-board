@@ -5,6 +5,7 @@ Run from the repo root, e.g.:
 """
 
 import argparse
+import os
 import signal
 import time
 from collections import deque
@@ -101,6 +102,20 @@ def load_buffer(path: Path, buffer, board_size: int) -> bool:
 
 OWNERSHIP_WEIGHT = 0.15
 SCORE_WEIGHT = 0.05
+
+
+def mark_spectate_training(path: Path, iteration: int) -> None:
+    """Replace the spectate header so the watcher shows the training
+    phase instead of a frozen final position."""
+    try:
+        lines = path.read_text().splitlines()
+    except OSError:
+        return
+    board = lines[1:] if len(lines) > 1 else []
+    header = f"training iteration {iteration} (self-play paused)"
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text("\n".join([header, *board]) + "\n")
+    os.replace(tmp, path)
 
 
 def train_steps(net, buffer, optimizer, device, batch_size, steps,
@@ -264,6 +279,8 @@ def main() -> None:
                                    ownership, sample.score, sample.w_own))
         selfplay_time = time.time() - start
 
+        mark_spectate_training(args.checkpoint_dir / "spectate.txt",
+                               iteration)
         start = time.time()
         policy_loss, value_loss, ownership_loss = train_steps(
             net, buffer, optimizer, device, args.batch_size,

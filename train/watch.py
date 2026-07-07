@@ -128,17 +128,20 @@ def run(stdscr, directory: Path, interval: float) -> None:
 
         # Loss curves to the right of the board: two separately scaled
         # charts (the series differ by an order of magnitude — never
-        # share one axis).
+        # share one axis). They start below the header line so long
+        # headers never collide with the chart titles.
         chart_x = max(30, 2 * len(board) + 8)
         chart_w = (curses.COLS - chart_x - 8) // 1
         chart_h = 4
+        p_top = 3
+        v_top = p_top + chart_h + 2
         if p_losses and chart_w >= 16:
-            draw_loss_chart(put, p_losses, "p-loss", 1, chart_x,
+            draw_loss_chart(put, p_losses, "p-loss", p_top, chart_x,
                             chart_w - 6, chart_h, color=1)
-            draw_loss_chart(put, v_losses, "v-loss", 2 + chart_h + 1,
-                            chart_x, chart_w - 6, chart_h, color=2)
+            draw_loss_chart(put, v_losses, "v-loss", v_top, chart_x,
+                            chart_w - 6, chart_h, color=2)
 
-        offset = 4 + max(len(board), 2 * (chart_h + 2))
+        offset = 2 + max(3 + len(board), v_top + chart_h + 1)
         put(offset, 0, "train.log", curses.A_BOLD)
         for i, line in enumerate(read_log_tail(log)):
             put(offset + 1 + i, 0, line[:curses.COLS - 1])
