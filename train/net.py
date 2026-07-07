@@ -64,7 +64,25 @@ class PolicyValueNet(nn.Module):
             nn.Linear(channels, 1),
             nn.Tanh(),
         )
+        # Auxiliary heads (KataGo): dense per-point learning signal for
+        # the tower. Ownership predicts the final owner of every point
+        # in [-1, 1]; score predicts the final margin / board_size,
+        # both from the side to play's perspective.
+        self.ownership_head = nn.Sequential(
+            nn.Conv2d(channels, 1, 1),
+            nn.Tanh(),
+            nn.Flatten(),
+        )
+        self.score_head = nn.Sequential(
+            nn.Conv2d(channels, 1, 1, bias=False),
+            nn.BatchNorm2d(1),
+            nn.ReLU(inplace=True),
+            nn.Flatten(),
+            nn.Linear(points, 1),
+        )
 
-    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor,
+                                                torch.Tensor, torch.Tensor]:
         x = self.tower(self.stem(x))
-        return self.policy_head(x), self.value_head(x).squeeze(-1)
+        return (self.policy_head(x), self.value_head(x).squeeze(-1),
+                self.ownership_head(x), self.score_head(x).squeeze(-1))

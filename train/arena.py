@@ -27,7 +27,12 @@ def load_evaluator(path: Path, device) -> tuple[NetEvaluator, dict]:
     net = PolicyValueNet(config["board_size"], config["channels"],
                          config["blocks"],
                          in_planes=config.get("in_planes", 3))
-    net.load_state_dict(state["model"])
+    try:
+        net.load_state_dict(state["model"])
+    except RuntimeError:
+        # Checkpoints predating the auxiliary heads: shared parts load,
+        # the unused new heads keep their fresh initialization.
+        net.load_state_dict(state["model"], strict=False)
     return NetEvaluator(net, device), config
 
 

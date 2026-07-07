@@ -68,7 +68,10 @@ def save_buffer(buffer, path: Path) -> None:
              pi=np.stack([entry[1] for entry in buffer]),
              z=np.array([entry[2] for entry in buffer], dtype=np.float32),
              w_pi=np.array([entry[3] for entry in buffer],
-                           dtype=np.float32))
+                           dtype=np.float32),
+             ownership=np.stack([entry[4] for entry in buffer]),
+             score=np.array([entry[5] for entry in buffer],
+                            dtype=np.float32))
 
 
 def load_buffer(path: Path, buffer, board_size: int) -> bool:
@@ -76,22 +79,28 @@ def load_buffer(path: Path, buffer, board_size: int) -> bool:
     if data["planes"].shape[-1] != board_size:
         print(f"ignoring {path}: board size mismatch", flush=True)
         return False
-    if "w_pi" not in data:
+    if "w_pi" not in data or "ownership" not in data:
         print(f"ignoring {path}: old buffer format", flush=True)
         return False
-    for planes, pi, z, w_pi in zip(data["planes"], data["pi"], data["z"],
-                                   data["w_pi"]):
-        buffer.append((planes, pi, float(z), float(w_pi)))
+    for entry in zip(data["planes"], data["pi"], data["z"], data["w_pi"],
+                     data["ownership"], data["score"]):
+        buffer.append((entry[0], entry[1], float(entry[2]),
+                       float(entry[3]), entry[4], float(entry[5])))
     return True
 
 
+OWNERSHIP_WEIGHT = 0.15
+SCORE_WEIGHT = 0.05
+
+
 def train_steps(net, buffer, optimizer, device, batch_size, steps,
-                rng) -> tuple[float, float]:
+                rng) -> tuple[float, float, float]:
     net.train()
     # Random indexing into a deque is O(n); snapshot it once.
     buffer = list(buffer)
     policy_losses = []
     value_losses = []
+    ownership_losses = []
     for _ in range(steps):
         indices = rng.choice(len(buffer), size=batch_size)
         planes = torch.from_numpy(
@@ -105,21 +114,32 @@ def train_steps(net, buffer, optimizer, device, batch_size, steps,
 
         w_pi = torch.tensor([buffer[i][3] for i in indices],
                             dtype=torch.float32, device=device)
+        target_own = torch.from_numpy(
+            np.stack([buffer[i][4] for i in indices])).to(device)
+        target_score = torch.tensor(
+            [buffer[i][5] for i in indices], dtype=torch.float32,
+            device=device) / net.board_size
 
-        logits, value = net(planes)
+        logits, value, ownership, score = net(planes)
         # Playout cap randomization: cheap-search moves carry no
         # policy target, so their weight is zero.
         per_sample = -(target_pi * F.log_softmax(logits, dim=1)).sum(1)
         policy_loss = (per_sample * w_pi).sum() / w_pi.sum().clamp(min=1.0)
         value_loss = F.mse_loss(value, target_z)
-        loss = policy_loss + value_loss
+        ownership_loss = F.mse_loss(ownership, target_own)
+        score_loss = F.mse_loss(score, target_score)
+        loss = (policy_loss + value_loss
+                + OWNERSHIP_WEIGHT * ownership_loss
+                + SCORE_WEIGHT * score_loss)
 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
         policy_losses.append(policy_loss.item())
         value_losses.append(value_loss.item())
-    return float(np.mean(policy_losses)), float(np.mean(value_losses))
+        ownership_losses.append(ownership_loss.item())
+    return (float(np.mean(policy_losses)), float(np.mean(value_losses)),
+            float(np.mean(ownership_losses)))
 
 
 def main() -> None:
@@ -138,14 +158,25 @@ def main() -> None:
     net = PolicyValueNet(args.board_size, args.channels, args.blocks,
                          in_planes)
     if state is not None:
-        net.load_state_dict(state["model"])
+        try:
+            net.load_state_dict(state["model"])
+        except RuntimeError:
+            # Warm start across architecture growth: shared parts load,
+            # new heads keep their fresh initialization.
+            missing, _ = net.load_state_dict(state["model"], strict=False)
+            print(f"warm start: {len(missing)} new parameters "
+                  "initialized fresh", flush=True)
     net.to(device)
     # Create the optimizer only once the model is on its device, so a
     # resumed optimizer state is cast onto the parameters' device too.
     optimizer = torch.optim.AdamW(net.parameters(), lr=args.lr,
                                   weight_decay=args.weight_decay)
     if state is not None:
-        optimizer.load_state_dict(state["optimizer"])
+        try:
+            optimizer.load_state_dict(state["optimizer"])
+        except (RuntimeError, ValueError):
+            print("optimizer state incompatible after architecture "
+                  "change; starting it fresh", flush=True)
         print(f"resumed from {args.resume} at iteration {start_iter}",
               flush=True)
 
@@ -180,13 +211,15 @@ def main() -> None:
         moves = sum(len(samples) for samples in game_samples)
         for samples in game_samples:
             for sample in samples:
-                for planes, pi in symmetries(sample.planes, sample.pi,
-                                             args.board_size):
-                    buffer.append((planes, pi, sample.z, sample.train_pi))
+                for planes, pi, ownership in symmetries(
+                        sample.planes, sample.pi, args.board_size,
+                        sample.ownership):
+                    buffer.append((planes, pi, sample.z, sample.train_pi,
+                                   ownership, sample.score))
         selfplay_time = time.time() - start
 
         start = time.time()
-        policy_loss, value_loss = train_steps(
+        policy_loss, value_loss, ownership_loss = train_steps(
             net, buffer, optimizer, device, args.batch_size,
             args.steps_per_iter, rng)
         train_time = time.time() - start
@@ -206,6 +239,7 @@ def main() -> None:
               f"B wins {black_wins}/{args.games_per_iter} | "
               f"avg moves {moves / args.games_per_iter:5.1f} | "
               f"p-loss {policy_loss:.4f} | v-loss {value_loss:.4f} | "
+              f"o-loss {ownership_loss:.4f} | "
               f"selfplay {selfplay_time:5.1f}s train {train_time:5.1f}s",
               flush=True)
 

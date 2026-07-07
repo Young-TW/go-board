@@ -35,6 +35,14 @@ def test_symmetries_preserve_content():
 
     variants = list(symmetries(planes, pi, board_size=5))
     assert len(variants) == 8
+    # With an ownership map, it is transformed alongside the planes.
+    ownership = rng.random(25).astype(np.float32)
+    with_owner = list(symmetries(planes, pi, 5, ownership))
+    assert len(with_owner) == 8
+    for p, _, o in with_owner:
+        assert o.shape == (25,)
+        assert np.allclose(sorted(o), sorted(ownership), atol=1e-6)
+    assert np.array_equal(with_owner[0][2], ownership)
     for p, transformed_pi in variants:
         assert p.shape == planes.shape
         assert p.flags["C_CONTIGUOUS"]

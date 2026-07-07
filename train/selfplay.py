@@ -47,7 +47,7 @@ class NetEvaluator:
         with torch.no_grad(), torch.autocast(
                 device_type=self.device.type, dtype=torch.bfloat16,
                 enabled=self.autocast):
-            logits, values = self.forward(x)
+            logits, values, _, _ = self.forward(x)
         probs = torch.softmax(logits.float(), dim=1).cpu().numpy()
         return probs, values.float().cpu().numpy()
 

@@ -12,7 +12,8 @@ def test_buffer_roundtrip(tmp_path):
     for i in range(10):
         buffer.append((rng.random((7, 5, 5)).astype(np.float32),
                        rng.random(26).astype(np.float32), 1.0,
-                       float(i % 2)))
+                       float(i % 2),
+                       rng.random(25).astype(np.float32), 3.5))
     path = tmp_path / "buffer.npz"
     save_buffer(buffer, path)
 
@@ -24,6 +25,8 @@ def test_buffer_roundtrip(tmp_path):
     assert restored[3][2] == 1.0
     assert restored[3][3] == 1.0
     assert restored[4][3] == 0.0
+    assert np.array_equal(restored[3][4], buffer[3][4])
+    assert restored[3][5] == 3.5
 
     # Board size mismatch is refused rather than poisoning the buffer.
     other = deque(maxlen=100)
