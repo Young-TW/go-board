@@ -13,6 +13,9 @@ struct SampleRec {
     std::vector<float> pi;        // points + 1
     Stone to_play;
     float z = 0.0f;
+    // Playout cap randomization: only moves searched with the full
+    // budget produce policy targets worth training on.
+    bool train_policy = true;
 };
 
 struct GameResult {
@@ -35,7 +38,12 @@ struct GameResult {
 // expansion requests, exposing their features via features().
 class SelfPlayPool {
 public:
+    // simulations is the full search budget; a move gets it with
+    // probability full_search_prob, otherwise cheap_simulations
+    // (playout cap randomization). Root noise applies only to
+    // full-search moves.
     SelfPlayPool(int n_games, int board_size, float komi, int simulations,
+                 int cheap_simulations, float full_search_prob,
                  int temperature_moves, int leaves_per_game, int parallel,
                  float c_puct, float dirichlet_alpha, float noise_fraction,
                  std::uint64_t seed);
@@ -69,6 +77,7 @@ private:
         // A reused subtree keeps its visits (deeper search) but never
         // substitutes for new simulations, or exploration collapses.
         int sims_left = 0;
+        bool full_search = true;
         std::vector<SampleRec> samples;
 
         explicit GameSlot(int size, float komi) : board(size, komi) {}
@@ -82,6 +91,7 @@ private:
     };
 
     std::unique_ptr<GameSlot> new_game();
+    void begin_move(GameSlot& game);
     void play_move(GameSlot& game);
     void finish(GameSlot& game);
 
@@ -89,11 +99,14 @@ private:
     int board_size_;
     float komi_;
     int simulations_;
+    int cheap_simulations_;
+    float full_search_prob_;
     int temperature_moves_;
     int leaves_per_game_;
     int max_moves_;
     int started_ = 0;
     Search search_;
+    std::mt19937_64 rng_;
     std::vector<std::unique_ptr<GameSlot>> slots_;
     std::vector<Pending> pending_;
     std::vector<float> features_;

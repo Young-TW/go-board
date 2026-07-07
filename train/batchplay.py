@@ -31,6 +31,8 @@ def _write_spectate(pool, path: Path, n_games: int) -> None:
 
 def play_games(evaluate_planes, n_games: int, board_size: int = 9,
                komi: float = 7.5, simulations: int = 128,
+               cheap_simulations: int | None = None,
+               full_search_prob: float = 1.0,
                temperature_moves: int = 8, leaves_per_game: int = 4,
                parallel: int | None = None, noise_fraction: float = 0.25,
                rng: np.random.Generator | None = None,
@@ -45,6 +47,9 @@ def play_games(evaluate_planes, n_games: int, board_size: int = 9,
     rng = rng if rng is not None else np.random.default_rng()
     pool = goboard.SelfPlayPool(
         n_games, board_size=board_size, komi=komi, simulations=simulations,
+        cheap_simulations=(cheap_simulations if cheap_simulations is not None
+                           else simulations),
+        full_search_prob=full_search_prob,
         temperature_moves=temperature_moves,
         leaves_per_game=leaves_per_game, parallel=parallel or 0,
         noise_fraction=noise_fraction,
@@ -64,13 +69,14 @@ def play_games(evaluate_planes, n_games: int, board_size: int = 9,
 
     all_samples = []
     margins = []
-    for features, pi, z, black_margin in pool.take_results():
+    for features, pi, z, train_pi, black_margin in pool.take_results():
         samples = []
         for i in range(features.shape[0]):
             # Feature plane 2 is the black-to-play indicator.
             to_play = Stone.BLACK if features[i, 2].max() > 0.5 \
                 else Stone.WHITE
-            samples.append(Sample(features[i], pi[i], to_play, float(z[i])))
+            samples.append(Sample(features[i], pi[i], to_play, float(z[i]),
+                                  float(train_pi[i])))
         all_samples.append(samples)
         margins.append(black_margin)
     return all_samples, margins

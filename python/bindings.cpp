@@ -58,10 +58,12 @@ PYBIND11_MODULE(goboard, m) {
                              "Batched C++ self-play driver; see "
                              "selfplay_pool.h for the collect/submit "
                              "protocol.")
-        .def(py::init<int, int, float, int, int, int, int, float, float,
-                      float, std::uint64_t>(),
+        .def(py::init<int, int, float, int, int, float, int, int, int,
+                      float, float, float, std::uint64_t>(),
              py::arg("n_games"), py::arg("board_size") = 9,
              py::arg("komi") = 7.5f, py::arg("simulations") = 128,
+             py::arg("cheap_simulations") = 128,
+             py::arg("full_search_prob") = 1.0f,
              py::arg("temperature_moves") = 8,
              py::arg("leaves_per_game") = 4,
              py::arg("parallel") = 0,  // 0 means n_games
@@ -119,6 +121,7 @@ PYBIND11_MODULE(goboard, m) {
                     {moves, Board::kFeaturePlanes, n, n});
                 py::array_t<float> pi({moves, points + 1});
                 py::array_t<float> z(moves);
+                py::array_t<float> train_pi(moves);
                 for (int i = 0; i < moves; i++) {
                     const SampleRec& sample = result.samples[i];
                     std::copy(sample.features.begin(),
@@ -129,8 +132,10 @@ PYBIND11_MODULE(goboard, m) {
                               pi.mutable_data() +
                                   std::size_t(i) * sample.pi.size());
                     z.mutable_at(i) = sample.z;
+                    train_pi.mutable_at(i) =
+                        sample.train_policy ? 1.0f : 0.0f;
                 }
-                out.append(py::make_tuple(features, pi, z,
+                out.append(py::make_tuple(features, pi, z, train_pi,
                                           result.black_margin));
             }
             return out;

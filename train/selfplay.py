@@ -54,10 +54,13 @@ class NetEvaluator:
 
 @dataclass
 class Sample:
-    planes: np.ndarray  # (3, size, size) float32
+    planes: np.ndarray  # (FEATURE_PLANES, size, size) float32
     pi: np.ndarray      # (size*size + 1,) MCTS visit distribution
     to_play: Stone
-    z: float = field(default=0.0)  # final outcome for to_play, in {-1, 1}
+    z: float = field(default=0.0)  # final outcome for to_play, in [-1, 1]
+    # Weight of this sample's policy target (0 for cheap-search moves
+    # under playout cap randomization).
+    train_pi: float = field(default=1.0)
 
 
 def play_game(evaluate, board_size: int = 9, komi: float = 7.5,

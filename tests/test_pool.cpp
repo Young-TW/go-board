@@ -20,7 +20,8 @@ static void test_pool_plays_games_to_completion() {
     const int points = board_size * board_size;
     const int stride = points + 1;
     SelfPlayPool pool(/*n_games=*/3, board_size, /*komi=*/7.5f,
-                      /*simulations=*/12, /*temperature_moves=*/4,
+                      /*simulations=*/12, /*cheap_simulations=*/6,
+                      /*full_search_prob=*/0.5f, /*temperature_moves=*/4,
                       /*leaves_per_game=*/4, /*parallel=*/2,
                       /*c_puct=*/1.5f, /*dirichlet_alpha=*/0.3f,
                       /*noise_fraction=*/0.25f, /*seed=*/42);
@@ -41,6 +42,15 @@ static void test_pool_plays_games_to_completion() {
 
     const auto results = pool.take_results();
     CHECK(results.size() == 3u);
+    int full = 0;
+    int cheap = 0;
+    for (const GameResult& result : results) {
+        for (const SampleRec& sample : result.samples) {
+            (sample.train_policy ? full : cheap)++;
+        }
+    }
+    CHECK(full > 0);   // full_search_prob = 0.5 should yield both
+    CHECK(cheap > 0);
     for (const GameResult& result : results) {
         CHECK(!result.samples.empty());
         CHECK(result.black_margin != 0.0f);  // komi 7.5: no draws

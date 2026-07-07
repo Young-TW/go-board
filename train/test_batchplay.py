@@ -50,6 +50,22 @@ def test_spectate_file_is_written(tmp_path):
     assert len(board) == 5
 
 
+def test_playout_cap_randomization_flags():
+    game_samples, _ = play_games(
+        uniform_planes, n_games=2, board_size=5, simulations=12,
+        cheap_simulations=6, full_search_prob=0.5, temperature_moves=2,
+        rng=np.random.default_rng(3))
+    flags = [s.train_pi for game in game_samples for s in game]
+    assert set(flags) <= {0.0, 1.0}
+    assert 0.0 in flags and 1.0 in flags
+
+    # prob=1 keeps the old behavior: every move trains the policy.
+    game_samples, _ = play_games(
+        uniform_planes, n_games=1, board_size=5, simulations=8,
+        temperature_moves=2, rng=np.random.default_rng(4))
+    assert all(s.train_pi == 1.0 for game in game_samples for s in game)
+
+
 def test_play_games_with_net_evaluator():
     torch.manual_seed(0)
     net = PolicyValueNet(board_size=5, channels=8, blocks=1,

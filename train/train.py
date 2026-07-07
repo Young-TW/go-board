@@ -29,7 +29,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--blocks", type=int, default=6)
     parser.add_argument("--iterations", type=int, default=50)
     parser.add_argument("--games-per-iter", type=int, default=20)
-    parser.add_argument("--simulations", type=int, default=128)
+    parser.add_argument("--simulations", type=int, default=480,
+                        help="full search budget per move")
+    parser.add_argument("--cheap-simulations", type=int, default=96)
+    parser.add_argument("--full-search-prob", type=float, default=0.25)
     parser.add_argument("--temperature-moves", type=int, default=8)
     parser.add_argument("--leaves-per-game", type=int, default=4)
     parser.add_argument("--noise-fraction", type=float, default=0.25)
@@ -63,7 +66,9 @@ def save_buffer(buffer, path: Path) -> None:
     np.savez(path,
              planes=np.stack([entry[0] for entry in buffer]),
              pi=np.stack([entry[1] for entry in buffer]),
-             z=np.array([entry[2] for entry in buffer], dtype=np.float32))
+             z=np.array([entry[2] for entry in buffer], dtype=np.float32),
+             w_pi=np.array([entry[3] for entry in buffer],
+                           dtype=np.float32))
 
 
 def load_buffer(path: Path, buffer, board_size: int) -> bool:
@@ -71,8 +76,12 @@ def load_buffer(path: Path, buffer, board_size: int) -> bool:
     if data["planes"].shape[-1] != board_size:
         print(f"ignoring {path}: board size mismatch", flush=True)
         return False
-    for planes, pi, z in zip(data["planes"], data["pi"], data["z"]):
-        buffer.append((planes, pi, float(z)))
+    if "w_pi" not in data:
+        print(f"ignoring {path}: old buffer format", flush=True)
+        return False
+    for planes, pi, z, w_pi in zip(data["planes"], data["pi"], data["z"],
+                                   data["w_pi"]):
+        buffer.append((planes, pi, float(z), float(w_pi)))
     return True
 
 
@@ -94,8 +103,14 @@ def train_steps(net, buffer, optimizer, device, batch_size, steps,
             [buffer[i][2] for i in indices], dtype=torch.float32,
             device=device)
 
+        w_pi = torch.tensor([buffer[i][3] for i in indices],
+                            dtype=torch.float32, device=device)
+
         logits, value = net(planes)
-        policy_loss = -(target_pi * F.log_softmax(logits, dim=1)).sum(1).mean()
+        # Playout cap randomization: cheap-search moves carry no
+        # policy target, so their weight is zero.
+        per_sample = -(target_pi * F.log_softmax(logits, dim=1)).sum(1)
+        policy_loss = (per_sample * w_pi).sum() / w_pi.sum().clamp(min=1.0)
         value_loss = F.mse_loss(value, target_z)
         loss = policy_loss + value_loss
 
@@ -154,6 +169,8 @@ def main() -> None:
             evaluator.evaluate_planes, args.games_per_iter,
             board_size=args.board_size, komi=args.komi,
             simulations=args.simulations,
+            cheap_simulations=args.cheap_simulations,
+            full_search_prob=args.full_search_prob,
             temperature_moves=args.temperature_moves,
             leaves_per_game=args.leaves_per_game,
             parallel=args.parallel_games,
@@ -165,7 +182,7 @@ def main() -> None:
             for sample in samples:
                 for planes, pi in symmetries(sample.planes, sample.pi,
                                              args.board_size):
-                    buffer.append((planes, pi, sample.z))
+                    buffer.append((planes, pi, sample.z, sample.train_pi))
         selfplay_time = time.time() - start
 
         start = time.time()

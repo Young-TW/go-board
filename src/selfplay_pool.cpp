@@ -8,7 +8,8 @@ constexpr double kVirtualLoss = -1.0;
 }
 
 SelfPlayPool::SelfPlayPool(int n_games, int board_size, float komi,
-                           int simulations, int temperature_moves,
+                           int simulations, int cheap_simulations,
+                           float full_search_prob, int temperature_moves,
                            int leaves_per_game, int parallel, float c_puct,
                            float dirichlet_alpha, float noise_fraction,
                            std::uint64_t seed)
@@ -16,10 +17,13 @@ SelfPlayPool::SelfPlayPool(int n_games, int board_size, float komi,
       board_size_(board_size),
       komi_(komi),
       simulations_(simulations),
+      cheap_simulations_(cheap_simulations),
+      full_search_prob_(full_search_prob),
       temperature_moves_(temperature_moves),
       leaves_per_game_(leaves_per_game),
       max_moves_(board_size * board_size * 2),
-      search_(c_puct, dirichlet_alpha, noise_fraction, seed) {
+      search_(c_puct, dirichlet_alpha, noise_fraction, seed),
+      rng_(seed + 1) {
     const int pool_size =
         std::min(parallel > 0 ? parallel : n_games, n_games);
     for (int i = 0; i < pool_size; i++) slots_.push_back(new_game());
@@ -27,7 +31,21 @@ SelfPlayPool::SelfPlayPool(int n_games, int board_size, float komi,
 
 std::unique_ptr<SelfPlayPool::GameSlot> SelfPlayPool::new_game() {
     started_++;
-    return std::make_unique<GameSlot>(board_size_, komi_);
+    auto game = std::make_unique<GameSlot>(board_size_, komi_);
+    begin_move(*game);
+    return game;
+}
+
+void SelfPlayPool::begin_move(GameSlot& game) {
+    std::uniform_real_distribution<double> uniform(0.0, 1.0);
+    game.full_search = uniform(rng_) < full_search_prob_;
+    game.sims_left =
+        game.full_search ? simulations_ : cheap_simulations_;
+    // Root noise belongs to full-search moves only; cheap moves exist
+    // to generate game/value data, not policy targets.
+    if (game.root && game.full_search) {
+        search_.add_dirichlet_noise(*game.root);
+    }
 }
 
 void SelfPlayPool::play_move(GameSlot& game) {
@@ -36,6 +54,7 @@ void SelfPlayPool::play_move(GameSlot& game) {
     rec.features = game.board.features(game.to_play);
     rec.pi = search_.policy(*game.root, points);
     rec.to_play = game.to_play;
+    rec.train_policy = game.full_search;
     game.samples.push_back(std::move(rec));
 
     const double temperature =
@@ -54,8 +73,7 @@ void SelfPlayPool::play_move(GameSlot& game) {
     game.to_play = opponent(game.to_play);
     game.move_count++;
     game.root = child && child->expanded() ? std::move(child) : nullptr;
-    game.sims_left = simulations_;
-    if (game.root) search_.add_dirichlet_noise(*game.root);
+    begin_move(game);
 }
 
 void SelfPlayPool::finish(GameSlot& game) {
@@ -141,9 +159,10 @@ void SelfPlayPool::submit(const float* priors, const float* values,
         if (pending.slot != nullptr) {  // root expansion
             auto root = std::make_unique<Node>();
             search_.expand(*root, pending.board, pending.to_play, row);
-            search_.add_dirichlet_noise(*root);
+            if (pending.slot->full_search) {
+                search_.add_dirichlet_noise(*root);
+            }
             pending.slot->root = std::move(root);
-            pending.slot->sims_left = simulations_;
         } else {
             Node* leaf = pending.path.back();
             if (!leaf->expanded()) {
