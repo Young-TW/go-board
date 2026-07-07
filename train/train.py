@@ -30,6 +30,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--games-per-iter", type=int, default=20)
     parser.add_argument("--simulations", type=int, default=128)
     parser.add_argument("--temperature-moves", type=int, default=8)
+    parser.add_argument("--leaves-per-game", type=int, default=4)
+    parser.add_argument("--parallel-games", type=int, default=None)
+    parser.add_argument("--no-compile", action="store_true",
+                        help="disable torch.compile for self-play inference")
     parser.add_argument("--buffer-size", type=int, default=100_000)
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--steps-per-iter", type=int, default=200)
@@ -103,15 +107,18 @@ def main() -> None:
 
     buffer: deque = deque(maxlen=args.buffer_size)
     args.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    evaluator = NetEvaluator(net, device, compile=not args.no_compile)
 
     for iteration in range(start_iter, args.iterations):
         start = time.time()
-        evaluator = NetEvaluator(net, device)
+        net.eval()  # train_steps leaves the net in train mode
         game_samples, margins = play_games(
             evaluator.evaluate_batch, args.games_per_iter,
             board_size=args.board_size, komi=args.komi,
             simulations=args.simulations,
-            temperature_moves=args.temperature_moves, rng=rng)
+            temperature_moves=args.temperature_moves,
+            leaves_per_game=args.leaves_per_game,
+            parallel=args.parallel_games, rng=rng)
         black_wins = sum(margin > 0 for margin in margins)
         moves = sum(len(samples) for samples in game_samples)
         for samples in game_samples:

@@ -96,11 +96,13 @@ class MCTS:
             path.append(node)
         return path, board, color
 
-    def backprop(self, path: list[Node], value: float) -> None:
+    def backprop(self, path: list[Node], value: float,
+                 visit_delta: int = 1) -> None:
         """`value` is from the perspective of the player to move at the
-        leaf; the sign flips at every step back up."""
+        leaf; the sign flips at every step back up. visit_delta=0 lets
+        a virtual loss be corrected without recounting the visit."""
         for node in reversed(path):
-            node.visits += 1
+            node.visits += visit_delta
             node.value_sum += value
             value = -value
 

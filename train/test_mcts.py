@@ -2,7 +2,8 @@ import numpy as np
 
 from goboard import Board, Stone
 
-from train.mcts import MCTS, apply_move, terminal_value, uniform_evaluate
+from train.mcts import (MCTS, Node, apply_move, terminal_value,
+                        uniform_evaluate)
 
 
 def make_mcts(seed: int = 0) -> MCTS:
@@ -61,6 +62,20 @@ def test_terminal_value_perspective():
     # Empty board: white wins by komi.
     assert terminal_value(board, Stone.BLACK) == -1.0
     assert terminal_value(board, Stone.WHITE) == 1.0
+
+
+def test_virtual_loss_correction_equals_plain_backprop():
+    mcts = make_mcts()
+    virtual = [Node(0.0), Node(0.0), Node(0.0)]
+    mcts.backprop(virtual, -1.0)                      # virtual loss
+    mcts.backprop(virtual, 0.5 - (-1.0), visit_delta=0)  # real value
+
+    plain = [Node(0.0), Node(0.0), Node(0.0)]
+    mcts.backprop(plain, 0.5)
+
+    for corrected, expected in zip(virtual, plain):
+        assert corrected.visits == expected.visits
+        assert abs(corrected.value_sum - expected.value_sum) < 1e-9
 
 
 def test_apply_move_pass_and_play():

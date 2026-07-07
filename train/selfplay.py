@@ -15,9 +15,18 @@ from train.net import default_device
 class NetEvaluator:
     """Adapts PolicyValueNet to the MCTS evaluate interface."""
 
-    def __init__(self, net, device=None):
+    def __init__(self, net, device=None, compile: bool = False):
         self.device = device if device is not None else default_device()
         self.net = net.to(self.device).eval()
+        self.forward = self.net
+        self.autocast = self.device.type == "cuda"
+        if compile and self.device.type == "cuda":
+            try:
+                # dynamic=True: the batch size changes every round as
+                # games finish, and per-size recompiles would dominate.
+                self.forward = torch.compile(self.net, dynamic=True)
+            except Exception:
+                pass  # compile is best-effort; eager works everywhere
 
     def __call__(self, board: Board, to_play: Stone):
         probs, values = self.evaluate_batch([(board, to_play)])
@@ -31,10 +40,12 @@ class NetEvaluator:
         # the feature planes.
         planes = planes[:, :self.net.in_planes]
         x = torch.from_numpy(planes).to(self.device)
-        with torch.no_grad():
-            logits, values = self.net(x)
-        probs = torch.softmax(logits, dim=1).cpu().numpy()
-        return probs, values.cpu().numpy()
+        with torch.no_grad(), torch.autocast(
+                device_type=self.device.type, dtype=torch.bfloat16,
+                enabled=self.autocast):
+            logits, values = self.forward(x)
+        probs = torch.softmax(logits.float(), dim=1).cpu().numpy()
+        return probs, values.float().cpu().numpy()
 
 
 @dataclass
