@@ -128,21 +128,26 @@ def train_steps(net, buffer, optimizer, device, batch_size, steps,
         w_own = torch.tensor([buffer[i][6] for i in indices],
                              dtype=torch.float32, device=device)
 
-        logits, value, ownership, score = net(planes)
-        # Playout cap randomization: cheap-search moves carry no
-        # policy target, so their weight is zero. Resigned games have
-        # no final position, so their ownership/score weight is zero.
-        per_sample = -(target_pi * F.log_softmax(logits, dim=1)).sum(1)
-        policy_loss = (per_sample * w_pi).sum() / w_pi.sum().clamp(min=1.0)
-        value_loss = F.mse_loss(value, target_z)
-        w_own_total = w_own.sum().clamp(min=1.0)
-        ownership_loss = ((ownership - target_own).pow(2).mean(dim=1)
+        # bf16 keeps fp32 master weights and needs no grad scaler.
+        with torch.autocast(device_type=device.type, dtype=torch.bfloat16,
+                            enabled=device.type == "cuda"):
+            logits, value, ownership, score = net(planes)
+            # Playout cap randomization: cheap-search moves carry no
+            # policy target, so their weight is zero. Resigned games
+            # have no final position, so their ownership/score weight
+            # is zero.
+            per_sample = -(target_pi * F.log_softmax(logits, dim=1)).sum(1)
+            policy_loss = (per_sample * w_pi).sum() / \
+                w_pi.sum().clamp(min=1.0)
+            value_loss = F.mse_loss(value, target_z)
+            w_own_total = w_own.sum().clamp(min=1.0)
+            ownership_loss = ((ownership - target_own).pow(2).mean(dim=1)
+                              * w_own).sum() / w_own_total
+            score_loss = ((score - target_score).pow(2)
                           * w_own).sum() / w_own_total
-        score_loss = ((score - target_score).pow(2)
-                      * w_own).sum() / w_own_total
-        loss = (policy_loss + value_loss
-                + OWNERSHIP_WEIGHT * ownership_loss
-                + SCORE_WEIGHT * score_loss)
+            loss = (policy_loss + value_loss
+                    + OWNERSHIP_WEIGHT * ownership_loss
+                    + SCORE_WEIGHT * score_loss)
 
         optimizer.zero_grad()
         loss.backward()
