@@ -69,14 +69,16 @@ def play_games(evaluate_planes, n_games: int, board_size: int = 9,
 
     all_samples = []
     margins = []
-    for features, pi, z, train_pi, black_margin in pool.take_results():
+    for (features, pi, z, train_pi, ownership,
+         score, black_margin) in pool.take_results():
         samples = []
         for i in range(features.shape[0]):
             # Feature plane 2 is the black-to-play indicator.
             to_play = Stone.BLACK if features[i, 2].max() > 0.5 \
                 else Stone.WHITE
             samples.append(Sample(features[i], pi[i], to_play, float(z[i]),
-                                  float(train_pi[i])))
+                                  float(train_pi[i]), ownership[i],
+                                  float(score[i])))
         all_samples.append(samples)
         margins.append(black_margin)
     return all_samples, margins

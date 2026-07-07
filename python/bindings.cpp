@@ -122,6 +122,8 @@ PYBIND11_MODULE(goboard, m) {
                 py::array_t<float> pi({moves, points + 1});
                 py::array_t<float> z(moves);
                 py::array_t<float> train_pi(moves);
+                py::array_t<float> ownership({moves, points});
+                py::array_t<float> score(moves);
                 for (int i = 0; i < moves; i++) {
                     const SampleRec& sample = result.samples[i];
                     std::copy(sample.features.begin(),
@@ -131,11 +133,17 @@ PYBIND11_MODULE(goboard, m) {
                     std::copy(sample.pi.begin(), sample.pi.end(),
                               pi.mutable_data() +
                                   std::size_t(i) * sample.pi.size());
+                    std::copy(sample.ownership.begin(),
+                              sample.ownership.end(),
+                              ownership.mutable_data() +
+                                  std::size_t(i) * sample.ownership.size());
                     z.mutable_at(i) = sample.z;
                     train_pi.mutable_at(i) =
                         sample.train_policy ? 1.0f : 0.0f;
+                    score.mutable_at(i) = sample.score_target;
                 }
                 out.append(py::make_tuple(features, pi, z, train_pi,
+                                          ownership, score,
                                           result.black_margin));
             }
             return out;

@@ -16,6 +16,10 @@ struct SampleRec {
     // Playout cap randomization: only moves searched with the full
     // budget produce policy targets worth training on.
     bool train_policy = true;
+    // Auxiliary targets, both from to_play's perspective: final
+    // per-point ownership in {-1, 0, 1} and the final score margin.
+    std::vector<float> ownership;  // points
+    float score_target = 0.0f;
 };
 
 struct GameResult {

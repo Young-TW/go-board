@@ -50,6 +50,22 @@ def test_spectate_file_is_written(tmp_path):
     assert len(board) == 5
 
 
+def test_ownership_and_score_targets():
+    game_samples, margins = play_games(
+        uniform_planes, n_games=2, board_size=5, simulations=10,
+        temperature_moves=2, rng=np.random.default_rng(5))
+    komi = 7.5
+    for samples, margin in zip(game_samples, margins):
+        for sample in samples:
+            sign = 1.0 if sample.to_play == Stone.BLACK else -1.0
+            assert sample.ownership.shape == (25,)
+            assert set(np.unique(sample.ownership)) <= {-1.0, 0.0, 1.0}
+            # Ownership sums to the (komi-free) margin, from the
+            # sample's perspective.
+            assert sample.ownership.sum() == sign * (margin + komi)
+            assert sample.score == sign * margin
+
+
 def test_playout_cap_randomization_flags():
     game_samples, _ = play_games(
         uniform_planes, n_games=2, board_size=5, simulations=12,

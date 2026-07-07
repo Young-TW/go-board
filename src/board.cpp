@@ -137,17 +137,16 @@ bool Board::play(int x, int y, Stone color) {
 
 void Board::pass() { consecutive_passes_++; }
 
-float Board::score() const {
-    int black = 0;
-    int white = 0;
+std::vector<std::int8_t> Board::ownership() const {
+    std::vector<std::int8_t> owner(point_.size(), 0);
     std::vector<char> visited(point_.size(), 0);
     std::vector<int> region;
 
     for (int start = 0; start < static_cast<int>(point_.size()); start++) {
         if (point_[start] == Stone::Black) {
-            black++;
+            owner[start] = 1;
         } else if (point_[start] == Stone::White) {
-            white++;
+            owner[start] = -1;
         } else if (!visited[start]) {
             // Flood-fill the empty region and note which colours it touches.
             region.clear();
@@ -170,14 +169,19 @@ float Board::score() const {
                     }
                 }
             }
-            if (touches_black && !touches_white) {
-                black += region.size();
-            } else if (touches_white && !touches_black) {
-                white += region.size();
+            if (touches_black != touches_white) {
+                const std::int8_t colour = touches_black ? 1 : -1;
+                for (int idx : region) owner[idx] = colour;
             }
         }
     }
-    return static_cast<float>(black - white) - komi_;
+    return owner;
+}
+
+float Board::score() const {
+    int sum = 0;
+    for (std::int8_t owner : ownership()) sum += owner;
+    return static_cast<float>(sum) - komi_;
 }
 
 std::vector<int> Board::legal_moves(Stone color) const {

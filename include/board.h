@@ -30,8 +30,12 @@ public:
     // The game ends after two consecutive passes.
     bool is_terminal() const { return consecutive_passes_ >= 2; }
 
-    // Tromp-Taylor score from black's perspective, komi included:
-    // stones plus empty regions bordering a single colour only.
+    // Tromp-Taylor ownership per point: +1 black, -1 white, 0 neutral
+    // (stones own their point; an empty region bordering only one
+    // colour belongs to it).
+    std::vector<std::int8_t> ownership() const;
+
+    // Tromp-Taylor score from black's perspective, komi included.
     float score() const;
 
     // Flattened indices (y * size + x) of all legal moves; pass is

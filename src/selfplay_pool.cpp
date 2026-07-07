@@ -82,13 +82,20 @@ void SelfPlayPool::finish(GameSlot& game) {
     GameResult result;
     result.black_margin = game.board.score();
     const bool black_won = result.black_margin > 0;
+    const std::vector<std::int8_t> owner = game.board.ownership();
     for (SampleRec& sample : game.samples) {
+        const float sign = sample.to_play == Stone::Black ? 1.0f : -1.0f;
         if (result.black_margin == 0.0f) {
             sample.z = 0.0f;  // jigo
         } else {
             sample.z = black_won == (sample.to_play == Stone::Black)
                            ? 1.0f
                            : -1.0f;
+        }
+        sample.score_target = sign * result.black_margin;
+        sample.ownership.resize(owner.size());
+        for (std::size_t i = 0; i < owner.size(); i++) {
+            sample.ownership[i] = sign * owner[i];
         }
     }
     result.samples = std::move(game.samples);

@@ -61,6 +61,10 @@ class Sample:
     # Weight of this sample's policy target (0 for cheap-search moves
     # under playout cap randomization).
     train_pi: float = field(default=1.0)
+    # Auxiliary targets from to_play's perspective: final per-point
+    # ownership (flat, in {-1, 0, 1}) and final score margin.
+    ownership: np.ndarray | None = field(default=None)
+    score: float = field(default=0.0)
 
 
 def play_game(evaluate, board_size: int = 9, komi: float = 7.5,
@@ -100,16 +104,24 @@ def play_game(evaluate, board_size: int = 9, komi: float = 7.5,
     return samples, black_margin
 
 
-def symmetries(planes: np.ndarray, pi: np.ndarray, board_size: int):
-    """Yield the 8 dihedral transforms of (planes, pi) for augmentation."""
+def symmetries(planes: np.ndarray, pi: np.ndarray, board_size: int,
+               ownership: np.ndarray | None = None):
+    """Yield the 8 dihedral transforms of (planes, pi[, ownership])."""
     board_pi = pi[:-1].reshape(board_size, board_size)
     pass_prob = pi[-1]
+    owner = (ownership.reshape(board_size, board_size)
+             if ownership is not None else None)
     for k in range(4):
         for flip in (False, True):
             p = np.rot90(planes, k, axes=(1, 2))
             b = np.rot90(board_pi, k)
+            o = np.rot90(owner, k) if owner is not None else None
             if flip:
                 p = np.flip(p, axis=2)
                 b = np.flip(b, axis=1)
-            yield (np.ascontiguousarray(p),
-                   np.append(b.ravel(), pass_prob).astype(np.float32))
+                o = np.flip(o, axis=1) if o is not None else None
+            result = (np.ascontiguousarray(p),
+                      np.append(b.ravel(), pass_prob).astype(np.float32))
+            if owner is not None:
+                result += (o.ravel().astype(np.float32),)
+            yield result

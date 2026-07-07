@@ -150,6 +150,21 @@ static void test_score_divided_board() {
     CHECK(board.score() == 15.0f - 1.0f - 7.5f);
 }
 
+static void test_ownership_map() {
+    Board board(5, 7.5f);
+    // Black wall on x=2; left region is black's, right touches both.
+    for (int y = 0; y < 5; y++) board.play(2, y, B);
+    board.play(4, 2, W);
+    const auto owner = board.ownership();
+    CHECK(owner[2 * 5 + 0] == 1);   // (0,2): black territory
+    CHECK(owner[2 * 5 + 2] == 1);   // (2,2): black stone
+    CHECK(owner[2 * 5 + 3] == 0);   // (3,2): neutral (touches both)
+    CHECK(owner[2 * 5 + 4] == -1);  // (4,2): white stone
+    int sum = 0;
+    for (auto o : owner) sum += o;
+    CHECK(board.score() == float(sum) - 7.5f);
+}
+
 static void test_legal_moves() {
     Board board(5);
     CHECK(board.legal_moves(B).size() == 25);
@@ -240,6 +255,7 @@ int main() {
     test_score_empty_board_is_neutral();
     test_score_single_stone_owns_everything();
     test_score_divided_board();
+    test_ownership_map();
     test_legal_moves();
     test_is_legal_matches_play_on_random_games();
     test_features_planes();
