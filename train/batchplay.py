@@ -89,5 +89,7 @@ def play_games(evaluate_planes, n_games: int, board_size: int = 9,
     stats = {
         "resign_calibration_games": pool.resign_calibration_games(),
         "resign_false_positives": pool.resign_false_positives(),
+        "eval_cache_lookups": pool.eval_cache_lookups(),
+        "eval_cache_hits": pool.eval_cache_hits(),
     }
     return all_samples, margins, stats

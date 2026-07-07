@@ -82,6 +82,18 @@ def test_playout_cap_randomization_flags():
     assert all(s.train_pi == 1.0 for game in game_samples for s in game)
 
 
+def test_eval_cache_hits_and_correctness():
+    game_samples, _, stats = play_games(
+        uniform_planes, n_games=4, board_size=5, simulations=12,
+        parallel=4, rng=np.random.default_rng(0))
+    assert stats["eval_cache_hits"] > 0
+    assert stats["eval_cache_lookups"] > stats["eval_cache_hits"]
+    # Games still complete with valid targets.
+    for samples in game_samples:
+        for sample in samples:
+            assert abs(sample.pi.sum() - 1.0) < 1e-4
+
+
 def black_always_losing(planes):
     """Value says black is lost; priors uniform."""
     priors, _ = uniform_planes(planes)

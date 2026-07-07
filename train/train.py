@@ -261,6 +261,7 @@ def main() -> None:
               f"o-loss {ownership_loss:.4f} | "
               f"resign-fp {stats['resign_false_positives']}"
               f"/{stats['resign_calibration_games']} | "
+              f"cache {stats['eval_cache_hits'] / max(1, stats['eval_cache_lookups']):.0%} | "
               f"selfplay {selfplay_time:5.1f}s train {train_time:5.1f}s",
               flush=True)
 

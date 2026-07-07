@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 #include "board.h"
@@ -82,6 +83,10 @@ public:
     int resign_calibration_games() const { return calibration_games_; }
     int resign_false_positives() const { return calibration_wrong_; }
 
+    // Evaluation cache statistics for this pool's lifetime.
+    long eval_cache_lookups() const { return cache_lookups_; }
+    long eval_cache_hits() const { return cache_hits_; }
+
 private:
     struct GameSlot {
         Board board;
@@ -107,6 +112,12 @@ private:
         std::vector<Node*> path;   // leaf path (empty for root requests)
         Board board;               // position that was evaluated
         Stone to_play;
+        std::uint64_t cache_key;
+    };
+
+    struct CacheEntry {
+        std::vector<float> priors;  // raw net output, pre-noise
+        float value;
     };
 
     std::unique_ptr<GameSlot> new_game();
@@ -126,11 +137,21 @@ private:
     int temperature_moves_;
     int leaves_per_game_;
     int max_moves_;
+    static std::uint64_t cache_key(const Board& board, Stone to_play);
+    const CacheEntry* cache_probe(std::uint64_t key);
+    void cache_store(std::uint64_t key, const float* priors, float value);
+
     float resign_threshold_;
     float no_resign_fraction_;
     int started_ = 0;
     int calibration_games_ = 0;
     int calibration_wrong_ = 0;
+    long cache_lookups_ = 0;
+    long cache_hits_ = 0;
+    // Same position + side to play => same features => same net
+    // output, so the cache is exact for one net version (one pool).
+    std::unordered_map<std::uint64_t, CacheEntry> eval_cache_;
+    static constexpr std::size_t kCacheCap = 250000;
     Search search_;
     std::mt19937_64 rng_;
     std::vector<std::unique_ptr<GameSlot>> slots_;

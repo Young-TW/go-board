@@ -5,6 +5,30 @@
 
 namespace {
 constexpr double kVirtualLoss = -1.0;
+constexpr std::uint64_t kBlackToPlayKey = 0x9E3779B97F4A7C15ULL;
+constexpr std::uint64_t kWhiteToPlayKey = 0x517CC1B727220A95ULL;
+}
+
+std::uint64_t SelfPlayPool::cache_key(const Board& board, Stone to_play) {
+    return board.hash() ^
+           (to_play == Stone::Black ? kBlackToPlayKey : kWhiteToPlayKey);
+}
+
+const SelfPlayPool::CacheEntry* SelfPlayPool::cache_probe(
+    std::uint64_t key) {
+    cache_lookups_++;
+    const auto it = eval_cache_.find(key);
+    if (it == eval_cache_.end()) return nullptr;
+    cache_hits_++;
+    return &it->second;
+}
+
+void SelfPlayPool::cache_store(std::uint64_t key, const float* priors,
+                               float value) {
+    if (eval_cache_.size() >= kCacheCap) return;  // openings cached first
+    const int stride = board_size_ * board_size_ + 1;
+    eval_cache_.emplace(
+        key, CacheEntry{std::vector<float>(priors, priors + stride), value});
 }
 
 SelfPlayPool::SelfPlayPool(int n_games, int board_size, float komi,
@@ -175,11 +199,25 @@ int SelfPlayPool::collect() {
         }
 
         if (!game->root) {
-            std::vector<float> f = game->board.features(game->to_play);
-            features_.insert(features_.end(), f.begin(), f.end());
-            pending_.push_back(
-                {game, {}, game->board, game->to_play});
-        } else {
+            const std::uint64_t key = cache_key(game->board, game->to_play);
+            if (const CacheEntry* entry = cache_probe(key)) {
+                auto root = std::make_unique<Node>();
+                search_.expand(*root, game->board, game->to_play,
+                               entry->priors.data());
+                if (game->full_search) {
+                    search_.add_dirichlet_noise(*root);
+                }
+                game->root = std::move(root);
+                // fall through: descents can start this same round
+            } else {
+                std::vector<float> f =
+                    game->board.features(game->to_play);
+                features_.insert(features_.end(), f.begin(), f.end());
+                pending_.push_back(
+                    {game, {}, game->board, game->to_play, key});
+            }
+        }
+        if (game->root) {
             const int budget = std::min(leaves_per_game_, game->sims_left);
             for (int k = 0; k < budget; k++) {
                 game->sims_left--;
@@ -191,13 +229,24 @@ int SelfPlayPool::collect() {
                     Search::backprop(path, terminal_value(board, color), 1);
                     continue;
                 }
+                const std::uint64_t key = cache_key(board, color);
+                if (const CacheEntry* entry = cache_probe(key)) {
+                    Node* leaf = path.back();
+                    if (!leaf->expanded()) {
+                        search_.expand(*leaf, board, color,
+                                       entry->priors.data());
+                    }
+                    Search::backprop(path, entry->value, 1);
+                    continue;
+                }
                 // Virtual loss: penalize the path so the next descent
                 // in this round explores elsewhere.
                 Search::backprop(path, kVirtualLoss, 1);
                 std::vector<float> f = board.features(color);
                 features_.insert(features_.end(), f.begin(), f.end());
                 pending_.push_back(
-                    {nullptr, std::move(path), std::move(board), color});
+                    {nullptr, std::move(path), std::move(board), color,
+                     key});
             }
         }
         i++;
@@ -211,6 +260,7 @@ void SelfPlayPool::submit(const float* priors, const float* values,
     for (int i = 0; i < count && i < int(pending_.size()); i++) {
         Pending& pending = pending_[i];
         const float* row = priors + std::size_t(i) * stride;
+        cache_store(pending.cache_key, row, values[i]);
         if (pending.slot != nullptr) {  // root expansion
             auto root = std::make_unique<Node>();
             search_.expand(*root, pending.board, pending.to_play, row);
