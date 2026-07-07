@@ -44,10 +44,18 @@ def test_spectate_file_is_written(tmp_path):
                temperature_moves=2, rng=np.random.default_rng(0),
                spectate_path=spectate, spectate_every=1)
     text = spectate.read_text()
-    header, *board = text.splitlines()
-    assert header.startswith("moves=")
-    assert "finished=" in header
-    assert len(board) == 5
+    lines = text.splitlines()
+    assert lines[0].startswith("slots=")
+    assert "finished=" in lines[0]
+    # The pool shrinks as games finish, so the final write may list
+    # fewer sections than n_games.
+    titles = [line for line in lines if line.startswith("--- game")]
+    assert titles
+    assert "moves=" in titles[0]
+    # Each section carries a full 5x5 board.
+    start = lines.index(titles[0]) + 1
+    assert len(lines[start:start + 5]) == 5
+    assert all(len(row.split()) == 5 for row in lines[start:start + 5])
 
 
 def test_ownership_and_score_targets():

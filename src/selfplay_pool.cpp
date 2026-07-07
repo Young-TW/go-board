@@ -310,14 +310,17 @@ std::vector<GameResult> SelfPlayPool::take_results() {
     return std::move(results_);
 }
 
-std::string SelfPlayPool::spectate_board() const {
-    return slots_.empty() ? std::string() : slots_[0]->board.to_string();
+std::string SelfPlayPool::spectate_board(int slot) const {
+    if (slot < 0 || slot >= slot_count()) return std::string();
+    return slots_[slot]->board.to_string();
 }
 
-int SelfPlayPool::spectate_moves() const {
-    return slots_.empty() ? 0 : slots_[0]->move_count;
+int SelfPlayPool::spectate_moves(int slot) const {
+    if (slot < 0 || slot >= slot_count()) return 0;
+    return slots_[slot]->move_count;
 }
 
-bool SelfPlayPool::spectate_black_to_play() const {
-    return !slots_.empty() && slots_[0]->to_play == Stone::Black;
+bool SelfPlayPool::spectate_black_to_play(int slot) const {
+    if (slot < 0 || slot >= slot_count()) return true;
+    return slots_[slot]->to_play == Stone::Black;
 }

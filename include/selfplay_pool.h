@@ -65,10 +65,11 @@ public:
     int collect();
     const std::vector<float>& features() const { return features_; }
 
-    // Live view of the first game slot, for spectator UIs.
-    std::string spectate_board() const;
-    int spectate_moves() const;
-    bool spectate_black_to_play() const;
+    // Live view of the game slots, for spectator UIs.
+    int slot_count() const { return int(slots_.size()); }
+    std::string spectate_board(int slot) const;
+    int spectate_moves(int slot) const;
+    bool spectate_black_to_play(int slot) const;
     int games_started() const { return started_; }
     int games_finished() const { return int(results_.size()); }
 

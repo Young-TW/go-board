@@ -21,11 +21,14 @@ from train.selfplay import Sample
 
 
 def _write_spectate(pool, path: Path, n_games: int) -> None:
-    board, moves, black_to_play, finished, _ = pool.spectate()
-    text = (f"moves={moves} to_play={'B' if black_to_play else 'W'} "
-            f"finished={finished}/{n_games}\n{board}")
+    slots, finished, _ = pool.spectate_all()
+    parts = [f"slots={len(slots)} finished={finished}/{n_games}"]
+    for i, (board, moves, black_to_play) in enumerate(slots):
+        parts.append(f"--- game {i} | moves={moves} "
+                     f"to_play={'B' if black_to_play else 'W'}")
+        parts.append(board.rstrip("\n"))
     tmp = path.with_suffix(".tmp")
-    tmp.write_text(text)
+    tmp.write_text("\n".join(parts) + "\n")
     os.replace(tmp, path)  # atomic: readers never see a partial file
 
 

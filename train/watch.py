@@ -67,15 +67,25 @@ def braille_chart(values: list[float], cells_w: int,
     return rows, lo, hi
 
 
-def read_spectate(path: Path) -> tuple[str, list[str]]:
+def read_spectate(path: Path) -> tuple[str, list[tuple[str, list[str]]]]:
+    """Returns (global header, [(game title, board lines), ...])."""
     try:
         lines = path.read_text().splitlines()
     except OSError:
         return "waiting for spectate file...", []
     if not lines:
         return "spectate file empty", []
-    header, board = lines[0], lines[1:]
-    return header, board
+    header = lines[0]
+    sections: list[tuple[str, list[str]]] = []
+    for line in lines[1:]:
+        if line.startswith("--- "):
+            sections.append((line[4:], []))
+        elif sections:
+            sections[-1][1].append(line)
+    if not sections and len(lines) > 1:
+        # Single-board format from before multi-game spectating.
+        sections = [("game 0", lines[1:])]
+    return header, sections
 
 
 def read_log_tail(path: Path, limit: int = 10) -> list[str]:
@@ -104,12 +114,14 @@ def run(stdscr, directory: Path, interval: float) -> None:
     curses.use_default_colors()
     curses.init_pair(1, curses.COLOR_CYAN, -1)
     curses.init_pair(2, curses.COLOR_YELLOW, -1)
+    stdscr.keypad(True)
     spectate = directory / "spectate.txt"
     log = directory / "train.log"
     history = directory / "history.log"
+    selected = 0
 
     while True:
-        header, board = read_spectate(spectate)
+        header, sections = read_spectate(spectate)
         # history.log accumulates across restarts; train.log is
         # truncated by each relaunch's stdout redirection.
         p_losses, v_losses = parse_losses(
@@ -122,22 +134,28 @@ def run(stdscr, directory: Path, interval: float) -> None:
             except curses.error:
                 pass  # terminal too small; draw what fits
 
-        put(0, 0, "go-board self-play spectator (q to quit)",
-            curses.A_BOLD)
+        put(0, 0, "go-board self-play spectator "
+            "(←/→ switch game, q quit)", curses.A_BOLD)
         put(1, 0, header)
+        board: list[str] = []
+        if sections:
+            selected %= len(sections)
+            title, board = sections[selected]
+            put(2, 0, f"[{selected + 1}/{len(sections)}] {title}",
+                curses.A_DIM)
         for y, row in enumerate(board):
             rendered = " ".join(STONES.get(c, c)
                                 for c in row.replace(" ", ""))
-            put(3 + y, 2, rendered)
+            put(4 + y, 2, rendered)
 
         # Loss curves to the right of the board: two separately scaled
         # charts (the series differ by an order of magnitude — never
         # share one axis). They start below the header line so long
         # headers never collide with the chart titles.
-        chart_x = max(30, 2 * len(board) + 8)
+        chart_x = max(34, 2 * len(board) + 8)
         chart_w = (curses.COLS - chart_x - 8) // 1
         chart_h = 4
-        p_top = 3
+        p_top = 4
         v_top = p_top + chart_h + 2
         if p_losses and chart_w >= 16:
             draw_loss_chart(put, p_losses, "p-loss", p_top, chart_x,
@@ -145,7 +163,7 @@ def run(stdscr, directory: Path, interval: float) -> None:
             draw_loss_chart(put, v_losses, "v-loss", v_top, chart_x,
                             chart_w - 6, chart_h, color=2)
 
-        offset = 2 + max(3 + len(board), v_top + chart_h + 1)
+        offset = 2 + max(4 + len(board), v_top + chart_h + 1)
         put(offset, 0, "train.log", curses.A_BOLD)
         for i, line in enumerate(read_log_tail(log)):
             put(offset + 1 + i, 0, line[:curses.COLS - 1])
@@ -153,8 +171,15 @@ def run(stdscr, directory: Path, interval: float) -> None:
 
         deadline = time.monotonic() + interval
         while time.monotonic() < deadline:
-            if stdscr.getch() == ord("q"):
+            key = stdscr.getch()
+            if key == ord("q"):
                 return
+            if key in (curses.KEY_LEFT, ord("h")):
+                selected -= 1
+                break  # redraw immediately
+            if key in (curses.KEY_RIGHT, ord("l")):
+                selected += 1
+                break
             time.sleep(0.05)
 
 
