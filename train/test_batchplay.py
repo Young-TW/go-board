@@ -82,6 +82,21 @@ def test_playout_cap_randomization_flags():
     assert all(s.train_pi == 1.0 for game in game_samples for s in game)
 
 
+def corner_biased(planes):
+    """Priors heavily favor one move so searches decide early."""
+    priors, values = uniform_planes(planes)
+    priors[:, 0] = 50.0  # (0,0) dominates after renormalization
+    return priors / priors.sum(axis=1, keepdims=True), values
+
+
+def test_early_termination_on_decided_searches():
+    _, _, stats = play_games(
+        corner_biased, n_games=2, board_size=5, simulations=40,
+        cheap_simulations=40, full_search_prob=0.0, temperature_moves=0,
+        rng=np.random.default_rng(8))
+    assert stats["early_terminations"] > 0
+
+
 def test_eval_cache_hits_and_correctness():
     game_samples, _, stats = play_games(
         uniform_planes, n_games=4, board_size=5, simulations=12,

@@ -86,6 +86,7 @@ public:
     // Evaluation cache statistics for this pool's lifetime.
     long eval_cache_lookups() const { return cache_lookups_; }
     long eval_cache_hits() const { return cache_hits_; }
+    long early_terminations() const { return early_stops_; }
 
 private:
     struct GameSlot {
@@ -148,6 +149,7 @@ private:
     int calibration_wrong_ = 0;
     long cache_lookups_ = 0;
     long cache_hits_ = 0;
+    long early_stops_ = 0;
     // Same position + side to play => same features => same net
     // output, so the cache is exact for one net version (one pool).
     std::unordered_map<std::uint64_t, CacheEntry> eval_cache_;

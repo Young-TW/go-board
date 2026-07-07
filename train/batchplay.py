@@ -91,5 +91,6 @@ def play_games(evaluate_planes, n_games: int, board_size: int = 9,
         "resign_false_positives": pool.resign_false_positives(),
         "eval_cache_lookups": pool.eval_cache_lookups(),
         "eval_cache_hits": pool.eval_cache_hits(),
+        "early_terminations": pool.early_terminations(),
     }
     return all_samples, margins, stats

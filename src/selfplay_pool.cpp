@@ -217,6 +217,29 @@ int SelfPlayPool::collect() {
                     {game, {}, game->board, game->to_play, key});
             }
         }
+        // Early termination: once the visit lead of the best child
+        // exceeds the remaining budget, further search cannot change
+        // the chosen move. Only for cheap (non-policy-target) moves
+        // past the temperature phase, where selection is argmax.
+        if (game->root && game->sims_left > 0 && !game->full_search
+            && game->move_count >= temperature_moves_) {
+            int best = 0;
+            int second = 0;
+            for (const Edge& edge : game->root->edges) {
+                const int visits = edge.child->visits;
+                if (visits > best) {
+                    second = best;
+                    best = visits;
+                } else if (visits > second) {
+                    second = visits;
+                }
+            }
+            if (best - second > game->sims_left) {
+                game->sims_left = 0;
+                early_stops_++;
+            }
+        }
+
         if (game->root) {
             const int budget = std::min(leaves_per_game_, game->sims_left);
             for (int k = 0; k < budget; k++) {

@@ -77,6 +77,7 @@ PYBIND11_MODULE(goboard, m) {
              &SelfPlayPool::resign_false_positives)
         .def("eval_cache_lookups", &SelfPlayPool::eval_cache_lookups)
         .def("eval_cache_hits", &SelfPlayPool::eval_cache_hits)
+        .def("early_terminations", &SelfPlayPool::early_terminations)
         .def("done", &SelfPlayPool::done)
         .def(
             "collect",
