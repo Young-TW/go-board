@@ -58,6 +58,10 @@ private:
         Stone to_play = Stone::Black;
         std::unique_ptr<Node> root;
         int move_count = 0;
+        // Fresh descents still owed before the next move is played.
+        // A reused subtree keeps its visits (deeper search) but never
+        // substitutes for new simulations, or exploration collapses.
+        int sims_left = 0;
         std::vector<SampleRec> samples;
 
         explicit GameSlot(int size, float komi) : board(size, komi) {}

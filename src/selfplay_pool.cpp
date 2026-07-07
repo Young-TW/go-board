@@ -54,6 +54,7 @@ void SelfPlayPool::play_move(GameSlot& game) {
     game.to_play = opponent(game.to_play);
     game.move_count++;
     game.root = child && child->expanded() ? std::move(child) : nullptr;
+    game.sims_left = simulations_;
     if (game.root) search_.add_dirichlet_noise(*game.root);
 }
 
@@ -77,7 +78,7 @@ int SelfPlayPool::collect() {
         GameSlot* game = slots_[i].get();
 
         bool finished = false;
-        while (game->root && game->root->visits >= simulations_) {
+        while (game->root && game->sims_left <= 0) {
             play_move(*game);
             if (game->board.is_terminal()
                 || game->move_count >= max_moves_) {
@@ -101,7 +102,9 @@ int SelfPlayPool::collect() {
             pending_.push_back(
                 {game, {}, game->board, game->to_play});
         } else {
-            for (int k = 0; k < leaves_per_game_; k++) {
+            const int budget = std::min(leaves_per_game_, game->sims_left);
+            for (int k = 0; k < budget; k++) {
+                game->sims_left--;
                 Board board(game->board);
                 Stone color = game->to_play;
                 std::vector<Node*> path =
@@ -135,6 +138,7 @@ void SelfPlayPool::submit(const float* priors, const float* values,
             search_.expand(*root, pending.board, pending.to_play, row);
             search_.add_dirichlet_noise(*root);
             pending.slot->root = std::move(root);
+            pending.slot->sims_left = simulations_;
         } else {
             Node* leaf = pending.path.back();
             if (!leaf->expanded()) {
