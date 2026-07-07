@@ -123,13 +123,18 @@ def test_resignation_ends_games_early():
         black_always_losing, n_games=4, board_size=5, simulations=12,
         temperature_moves=0, resign_threshold=0.9, no_resign_fraction=0.0,
         rng=np.random.default_rng(6))
-    full_length = [s for g in game_samples for s in g]
-    assert all(margin == -10000.0 for margin in margins)  # white wins
-    assert len(full_length) < 4 * 20  # far shorter than played-out games
-    for sample in full_length:
-        assert sample.w_own == 0.0  # no scored final position
-        expected = 1.0 if sample.to_play == Stone.WHITE else -1.0
-        assert sample.z == expected
+    resigned = [margin == -10000.0 for margin in margins]
+    # Resigns only happen from move 3*board_size on; games that end
+    # naturally before that stay scored.
+    assert any(resigned)
+    for samples, was_resigned in zip(game_samples, resigned):
+        if not was_resigned:
+            continue
+        assert len(samples) >= 3 * 5  # never before the minimum
+        for sample in samples:
+            assert sample.w_own == 0.0  # no scored final position
+            expected = 1.0 if sample.to_play == Stone.WHITE else -1.0
+            assert sample.z == expected
     assert stats["resign_calibration_games"] == 0
 
 
