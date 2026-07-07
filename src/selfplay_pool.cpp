@@ -52,7 +52,9 @@ void SelfPlayPool::play_move(GameSlot& game) {
     const int points = board_size_ * board_size_;
     SampleRec rec;
     rec.features = game.board.features(game.to_play);
-    rec.pi = search_.policy(*game.root, points);
+    rec.pi = search_.policy(
+        *game.root, points,
+        game.full_search ? Search::kForcedPlayoutK : -1.0f);
     rec.to_play = game.to_play;
     rec.train_policy = game.full_search;
     game.samples.push_back(std::move(rec));
@@ -130,8 +132,8 @@ int SelfPlayPool::collect() {
                 game->sims_left--;
                 Board board(game->board);
                 Stone color = game->to_play;
-                std::vector<Node*> path =
-                    search_.descend(*game->root, board, color);
+                std::vector<Node*> path = search_.descend(
+                    *game->root, board, color, game->full_search);
                 if (board.is_terminal()) {
                     Search::backprop(path, terminal_value(board, color), 1);
                     continue;

@@ -26,23 +26,41 @@ Search::Search(float c_puct, float dirichlet_alpha, float noise_fraction,
       rng_(seed) {}
 
 std::vector<Node*> Search::descend(Node& root, Board& board,
-                                   Stone& to_play) const {
+                                   Stone& to_play,
+                                   bool force_at_root) const {
     std::vector<Node*> path;
     path.push_back(&root);
     Node* node = &root;
+    bool at_root = true;
     while (node->expanded()) {
-        const double sqrt_visits = std::sqrt(double(node->visits));
         Edge* best = nullptr;
-        double best_score = -1e30;
-        for (Edge& edge : node->edges) {
-            const double q = -edge.child->value();
-            const double u = c_puct_ * edge.prior * sqrt_visits /
-                             (1 + edge.child->visits);
-            if (q + u > best_score) {
-                best_score = q + u;
-                best = &edge;
+        if (at_root && force_at_root) {
+            double best_deficit = 0.0;
+            for (Edge& edge : node->edges) {
+                const double forced =
+                    kForcedPlayoutK *
+                    std::sqrt(double(edge.prior) * double(node->visits));
+                const double deficit = forced - edge.child->visits;
+                if (deficit > best_deficit) {
+                    best_deficit = deficit;
+                    best = &edge;
+                }
             }
         }
+        if (!best) {
+            const double sqrt_visits = std::sqrt(double(node->visits));
+            double best_score = -1e30;
+            for (Edge& edge : node->edges) {
+                const double q = -edge.child->value();
+                const double u = c_puct_ * edge.prior * sqrt_visits /
+                                 (1 + edge.child->visits);
+                if (q + u > best_score) {
+                    best_score = q + u;
+                    best = &edge;
+                }
+            }
+        }
+        at_root = false;
         apply_move(board, best->move, to_play);
         to_play = opponent(to_play);
         node = best->child.get();
@@ -94,12 +112,25 @@ void Search::add_dirichlet_noise(Node& root) {
     }
 }
 
-std::vector<float> Search::policy(const Node& root, int points) const {
+std::vector<float> Search::policy(const Node& root, int points,
+                                  float prune_forced_k) const {
     std::vector<float> pi(points + 1, 0.0f);
+    const Edge* best = nullptr;
+    for (const Edge& edge : root.edges) {
+        if (!best || edge.child->visits > best->child->visits) {
+            best = &edge;
+        }
+    }
     double total = 0.0;
     for (const Edge& edge : root.edges) {
-        pi[edge.move] = float(edge.child->visits);
-        total += edge.child->visits;
+        double visits = edge.child->visits;
+        if (prune_forced_k > 0 && &edge != best) {
+            visits -= prune_forced_k * std::sqrt(double(edge.prior) *
+                                                 double(root.visits));
+            if (visits < 1.0) visits = 0.0;
+        }
+        pi[edge.move] = float(visits);
+        total += visits;
     }
     if (total > 0) {
         for (float& p : pi) p = float(p / total);

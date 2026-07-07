@@ -73,7 +73,32 @@ static void test_pool_plays_games_to_completion() {
     }
 }
 
+static void test_policy_target_pruning() {
+    // Root with three children: visits 10 / 5 / 1, root.visits = 16.
+    Node root;
+    root.visits = 16;
+    const float priors[] = {0.2f, 0.3f, 0.5f};
+    const int visits[] = {10, 5, 1};
+    for (int i = 0; i < 3; i++) {
+        Edge edge{i, priors[i], std::make_unique<Node>()};
+        edge.child->visits = visits[i];
+        root.edges.push_back(std::move(edge));
+    }
+    Search search(1.5f, 0.3f, 0.25f, 1);
+
+    const auto raw = search.policy(root, 4);
+    CHECK(std::abs(raw[0] - 10.0f / 16.0f) < 1e-5f);
+
+    // k=2: child 1 keeps max(0, 5 - 2*sqrt(.3*16)) = 0.62 -> <1 -> 0;
+    // child 2 is pruned to 0 as well; the best child keeps everything.
+    const auto pruned = search.policy(root, 4, 2.0f);
+    CHECK(pruned[0] == 1.0f);
+    CHECK(pruned[1] == 0.0f);
+    CHECK(pruned[2] == 0.0f);
+}
+
 int main() {
+    test_policy_target_pruning();
     test_pool_plays_games_to_completion();
     if (failures == 0) {
         std::cout << "all tests passed\n";

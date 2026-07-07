@@ -39,9 +39,15 @@ public:
     Search(float c_puct, float dirichlet_alpha, float noise_fraction,
            std::uint64_t seed);
 
+    // KataGo-style forced playouts: at a noised root, a child whose
+    // visits fall short of k*sqrt(prior * root_visits) is searched
+    // regardless of PUCT, so root noise actually gets explored.
+    static constexpr float kForcedPlayoutK = 2.0f;
+
     // Walks to a leaf, mutating `board` and `to_play` along the way.
-    std::vector<Node*> descend(Node& root, Board& board,
-                               Stone& to_play) const;
+    // force_at_root enables forced playouts at the first selection.
+    std::vector<Node*> descend(Node& root, Board& board, Stone& to_play,
+                               bool force_at_root = false) const;
 
     // Creates edges for every legal move using `priors` (an array of
     // size*size + 1 move probabilities), masked and renormalized.
@@ -56,8 +62,12 @@ public:
 
     void add_dirichlet_noise(Node& root);
 
-    // Visit-count distribution over size*size + 1 moves.
-    std::vector<float> policy(const Node& root, int points) const;
+    // Visit-count distribution over size*size + 1 moves. A positive
+    // prune_forced_k subtracts forced playouts from every non-best
+    // child (policy target pruning), so forcing does not pollute the
+    // training target.
+    std::vector<float> policy(const Node& root, int points,
+                              float prune_forced_k = -1.0f) const;
 
     int select_move(const Node& root, int points, double temperature);
 
