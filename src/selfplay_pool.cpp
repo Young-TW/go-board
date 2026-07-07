@@ -160,3 +160,15 @@ void SelfPlayPool::submit(const float* priors, const float* values,
 std::vector<GameResult> SelfPlayPool::take_results() {
     return std::move(results_);
 }
+
+std::string SelfPlayPool::spectate_board() const {
+    return slots_.empty() ? std::string() : slots_[0]->board.to_string();
+}
+
+int SelfPlayPool::spectate_moves() const {
+    return slots_.empty() ? 0 : slots_[0]->move_count;
+}
+
+bool SelfPlayPool::spectate_black_to_play() const {
+    return !slots_.empty() && slots_[0]->to_play == Stone::Black;
+}

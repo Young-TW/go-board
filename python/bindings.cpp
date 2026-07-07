@@ -100,6 +100,15 @@ PYBIND11_MODULE(goboard, m) {
                 pool.submit(prior_data, value_data, count);
             },
             py::arg("priors"), py::arg("values"))
+        .def("spectate",
+             [](const SelfPlayPool& pool) {
+                 return py::make_tuple(
+                     pool.spectate_board(), pool.spectate_moves(),
+                     pool.spectate_black_to_play(), pool.games_finished(),
+                     pool.games_started());
+             },
+             "Live view of one running game: (board_text, move_count, "
+             "black_to_play, games_finished, games_started).")
         .def("take_results", [](SelfPlayPool& pool) {
             const int n = pool.board_size();
             const int points = n * n;

@@ -68,6 +68,12 @@ uv run python -m train.train --board-size 9 --iterations 50
 Checkpoints land in `checkpoints/` (gitignored); resume with
 `--resume checkpoints/iter_0049.pt`.
 
+Watch the training self-play live from another terminal (read-only):
+
+```bash
+uv run python -m train.watch --dir checkpoints
+```
+
 Compare two checkpoints head-to-head, or play against one yourself:
 
 ```bash

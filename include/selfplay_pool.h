@@ -46,6 +46,13 @@ public:
     int collect();
     const std::vector<float>& features() const { return features_; }
 
+    // Live view of the first game slot, for spectator UIs.
+    std::string spectate_board() const;
+    int spectate_moves() const;
+    bool spectate_black_to_play() const;
+    int games_started() const { return started_; }
+    int games_finished() const { return int(results_.size()); }
+
     // priors: count rows of points+1; values: count entries, from the
     // perspective of the side to play at the evaluated position.
     void submit(const float* priors, const float* values, int count);

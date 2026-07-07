@@ -9,6 +9,9 @@ Python only evaluates the feature batches on the GPU:
         pool.submit(*evaluate_planes(planes))
 """
 
+import os
+from pathlib import Path
+
 import numpy as np
 
 import goboard
@@ -17,11 +20,22 @@ from goboard import Stone
 from train.selfplay import Sample
 
 
+def _write_spectate(pool, path: Path, n_games: int) -> None:
+    board, moves, black_to_play, finished, _ = pool.spectate()
+    text = (f"moves={moves} to_play={'B' if black_to_play else 'W'} "
+            f"finished={finished}/{n_games}\n{board}")
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(text)
+    os.replace(tmp, path)  # atomic: readers never see a partial file
+
+
 def play_games(evaluate_planes, n_games: int, board_size: int = 9,
                komi: float = 7.5, simulations: int = 128,
                temperature_moves: int = 8, leaves_per_game: int = 4,
                parallel: int | None = None, noise_fraction: float = 0.25,
-               rng: np.random.Generator | None = None):
+               rng: np.random.Generator | None = None,
+               spectate_path: Path | None = None,
+               spectate_every: int = 8):
     """Play n_games self-play games, at most `parallel` concurrently.
 
     evaluate_planes maps a float32 array (count, FEATURE_PLANES, size,
@@ -36,7 +50,11 @@ def play_games(evaluate_planes, n_games: int, board_size: int = 9,
         noise_fraction=noise_fraction,
         seed=int(rng.integers(0, 2**63 - 1)))
 
+    rounds = 0
     while not pool.done():
+        if spectate_path is not None and rounds % spectate_every == 0:
+            _write_spectate(pool, spectate_path, n_games)
+        rounds += 1
         planes = pool.collect()
         if planes.shape[0] == 0:
             continue

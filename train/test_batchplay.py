@@ -38,6 +38,18 @@ def test_play_games_uniform_evaluator():
     assert game_samples[0][1].to_play == Stone.WHITE
 
 
+def test_spectate_file_is_written(tmp_path):
+    spectate = tmp_path / "spectate.txt"
+    play_games(uniform_planes, n_games=2, board_size=5, simulations=8,
+               temperature_moves=2, rng=np.random.default_rng(0),
+               spectate_path=spectate, spectate_every=1)
+    text = spectate.read_text()
+    header, *board = text.splitlines()
+    assert header.startswith("moves=")
+    assert "finished=" in header
+    assert len(board) == 5
+
+
 def test_play_games_with_net_evaluator():
     torch.manual_seed(0)
     net = PolicyValueNet(board_size=5, channels=8, blocks=1,

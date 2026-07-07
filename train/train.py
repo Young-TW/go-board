@@ -120,7 +120,8 @@ def main() -> None:
             temperature_moves=args.temperature_moves,
             leaves_per_game=args.leaves_per_game,
             parallel=args.parallel_games,
-            noise_fraction=args.noise_fraction, rng=rng)
+            noise_fraction=args.noise_fraction, rng=rng,
+            spectate_path=args.checkpoint_dir / "spectate.txt")
         black_wins = sum(margin > 0 for margin in margins)
         moves = sum(len(samples) for samples in game_samples)
         for samples in game_samples:
