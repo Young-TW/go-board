@@ -66,10 +66,11 @@ std::unique_ptr<SelfPlayPool::GameSlot> SelfPlayPool::new_game() {
 }
 
 bool SelfPlayPool::maybe_resign(GameSlot& game) {
-    // Never this early, and always track the fixed probe threshold so
-    // false-positive calibration exists even while resignation is
-    // disabled (the training loop gates activation on it).
-    if (game.move_count < board_size_) return false;
+    // Never this early (delusional resigns cluster in the opening;
+    // genuinely lost positions emerge in the midgame), and always
+    // track the fixed probe threshold so false-positive calibration
+    // exists even while resignation is disabled.
+    if (game.move_count < 3 * board_size_) return false;
     const double value = game.root->value();
     if (value < -kResignProbe && game.would_resign == Stone::Empty) {
         game.would_resign = game.to_play;

@@ -15,6 +15,7 @@ import torch
 import torch.nn.functional as F
 
 import goboard
+from goboard import Board, Stone
 
 from train.batchplay import play_games
 from train.net import PolicyValueNet, default_device
@@ -240,7 +241,18 @@ def main() -> None:
              stats["resign_calibration_games"]))
         fp = sum(f for f, _ in calibration_window)
         observed = sum(g for _, g in calibration_window)
-        resign_active = observed >= 30 and fp / observed < args.resign_fp_limit
+        # The fp gate alone cannot catch a self-consistent delusion
+        # (the would-resigner really does lose when both sides believe
+        # it), so also require the value net to be sane about the one
+        # position with a known answer: the empty board is close to
+        # even, and both collapses showed |v(empty)| ~ 0.9.
+        empty = Board(size=args.board_size, komi=args.komi)
+        net.eval()
+        v_empty = max(abs(evaluator(empty, Stone.BLACK)[1]),
+                      abs(evaluator(empty, Stone.WHITE)[1]))
+        resign_active = (observed >= 30
+                         and fp / observed < args.resign_fp_limit
+                         and v_empty < 0.6)
         black_wins = sum(margin > 0 for margin in margins)
         moves = sum(len(samples) for samples in game_samples)
         for samples in game_samples:
