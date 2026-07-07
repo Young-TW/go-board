@@ -35,6 +35,8 @@ def play_games(evaluate_planes, n_games: int, board_size: int = 9,
                full_search_prob: float = 1.0,
                temperature_moves: int = 8, leaves_per_game: int = 4,
                parallel: int | None = None, noise_fraction: float = 0.25,
+               resign_threshold: float = 2.0,
+               no_resign_fraction: float = 0.1,
                rng: np.random.Generator | None = None,
                spectate_path: Path | None = None,
                spectate_every: int = 8):
@@ -42,7 +44,8 @@ def play_games(evaluate_planes, n_games: int, board_size: int = 9,
 
     evaluate_planes maps a float32 array (count, FEATURE_PLANES, size,
     size) to (priors, values) arrays. Returns (list_of_sample_lists,
-    list_of_black_margins).
+    list_of_black_margins, stats). Resigned games have sentinel
+    margins of +/-10000.
     """
     rng = rng if rng is not None else np.random.default_rng()
     pool = goboard.SelfPlayPool(
@@ -53,6 +56,8 @@ def play_games(evaluate_planes, n_games: int, board_size: int = 9,
         temperature_moves=temperature_moves,
         leaves_per_game=leaves_per_game, parallel=parallel or 0,
         noise_fraction=noise_fraction,
+        resign_threshold=resign_threshold,
+        no_resign_fraction=no_resign_fraction,
         seed=int(rng.integers(0, 2**63 - 1)))
 
     rounds = 0
@@ -69,8 +74,8 @@ def play_games(evaluate_planes, n_games: int, board_size: int = 9,
 
     all_samples = []
     margins = []
-    for (features, pi, z, train_pi, ownership,
-         score, black_margin) in pool.take_results():
+    for (features, pi, z, train_pi, ownership, score, w_own,
+         black_margin) in pool.take_results():
         samples = []
         for i in range(features.shape[0]):
             # Feature plane 2 is the black-to-play indicator.
@@ -78,7 +83,11 @@ def play_games(evaluate_planes, n_games: int, board_size: int = 9,
                 else Stone.WHITE
             samples.append(Sample(features[i], pi[i], to_play, float(z[i]),
                                   float(train_pi[i]), ownership[i],
-                                  float(score[i])))
+                                  float(score[i]), float(w_own[i])))
         all_samples.append(samples)
         margins.append(black_margin)
-    return all_samples, margins
+    stats = {
+        "resign_calibration_games": pool.resign_calibration_games(),
+        "resign_false_positives": pool.resign_false_positives(),
+    }
+    return all_samples, margins, stats

@@ -12,6 +12,7 @@ SelfPlayPool::SelfPlayPool(int n_games, int board_size, float komi,
                            float full_search_prob, int temperature_moves,
                            int leaves_per_game, int parallel, float c_puct,
                            float dirichlet_alpha, float noise_fraction,
+                           float resign_threshold, float no_resign_fraction,
                            std::uint64_t seed)
     : n_games_(n_games),
       board_size_(board_size),
@@ -22,6 +23,8 @@ SelfPlayPool::SelfPlayPool(int n_games, int board_size, float komi,
       temperature_moves_(temperature_moves),
       leaves_per_game_(leaves_per_game),
       max_moves_(board_size * board_size * 2),
+      resign_threshold_(resign_threshold),
+      no_resign_fraction_(no_resign_fraction),
       search_(c_puct, dirichlet_alpha, noise_fraction, seed),
       rng_(seed + 1) {
     const int pool_size =
@@ -32,8 +35,25 @@ SelfPlayPool::SelfPlayPool(int n_games, int board_size, float komi,
 std::unique_ptr<SelfPlayPool::GameSlot> SelfPlayPool::new_game() {
     started_++;
     auto game = std::make_unique<GameSlot>(board_size_, komi_);
+    std::uniform_real_distribution<double> uniform(0.0, 1.0);
+    game->allow_resign = uniform(rng_) >= no_resign_fraction_;
     begin_move(*game);
     return game;
+}
+
+bool SelfPlayPool::maybe_resign(GameSlot& game) {
+    if (resign_threshold_ >= 1.0f) return false;
+    if (game.root->value() >= -resign_threshold_) return false;
+    if (!game.allow_resign) {
+        // Calibration game: remember who would have resigned first,
+        // then play on to the end.
+        if (game.would_resign == Stone::Empty) {
+            game.would_resign = game.to_play;
+        }
+        return false;
+    }
+    finish_resigned(game, opponent(game.to_play));
+    return true;
 }
 
 void SelfPlayPool::begin_move(GameSlot& game) {
@@ -78,11 +98,33 @@ void SelfPlayPool::play_move(GameSlot& game) {
     begin_move(game);
 }
 
+void SelfPlayPool::finish_resigned(GameSlot& game, Stone winner) {
+    GameResult result;
+    // Sentinel: no scored final position exists for a resigned game.
+    result.black_margin = winner == Stone::Black ? 10000.0f : -10000.0f;
+    const int points = board_size_ * board_size_;
+    for (SampleRec& sample : game.samples) {
+        sample.z = sample.to_play == winner ? 1.0f : -1.0f;
+        sample.has_ownership = false;
+        sample.ownership.assign(points, 0.0f);
+        sample.score_target = 0.0f;
+    }
+    result.samples = std::move(game.samples);
+    results_.push_back(std::move(result));
+}
+
 void SelfPlayPool::finish(GameSlot& game) {
     GameResult result;
     result.black_margin = game.board.score();
     const bool black_won = result.black_margin > 0;
     const std::vector<std::int8_t> owner = game.board.ownership();
+    if (game.would_resign != Stone::Empty) {
+        calibration_games_++;
+        if (result.black_margin != 0.0f
+            && black_won == (game.would_resign == Stone::Black)) {
+            calibration_wrong_++;  // the would-resigner actually won
+        }
+    }
     for (SampleRec& sample : game.samples) {
         const float sign = sample.to_play == Stone::Black ? 1.0f : -1.0f;
         if (result.black_margin == 0.0f) {
@@ -111,6 +153,10 @@ int SelfPlayPool::collect() {
 
         bool finished = false;
         while (game->root && game->sims_left <= 0) {
+            if (maybe_resign(*game)) {
+                finished = true;
+                break;
+            }
             play_move(*game);
             if (game->board.is_terminal()
                 || game->move_count >= max_moves_) {

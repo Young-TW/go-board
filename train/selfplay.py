@@ -62,9 +62,11 @@ class Sample:
     # under playout cap randomization).
     train_pi: float = field(default=1.0)
     # Auxiliary targets from to_play's perspective: final per-point
-    # ownership (flat, in {-1, 0, 1}) and final score margin.
+    # ownership (flat, in {-1, 0, 1}) and final score margin. w_own is
+    # 0 for resigned games (no scored final position exists).
     ownership: np.ndarray | None = field(default=None)
     score: float = field(default=0.0)
+    w_own: float = field(default=1.0)
 
 
 def play_game(evaluate, board_size: int = 9, komi: float = 7.5,

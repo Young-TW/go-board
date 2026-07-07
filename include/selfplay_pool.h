@@ -18,8 +18,11 @@ struct SampleRec {
     bool train_policy = true;
     // Auxiliary targets, both from to_play's perspective: final
     // per-point ownership in {-1, 0, 1} and the final score margin.
+    // Resigned games have no final position, so theirs carry no
+    // weight (has_ownership = false).
     std::vector<float> ownership;  // points
     float score_target = 0.0f;
+    bool has_ownership = true;
 };
 
 struct GameResult {
@@ -45,11 +48,14 @@ public:
     // simulations is the full search budget; a move gets it with
     // probability full_search_prob, otherwise cheap_simulations
     // (playout cap randomization). Root noise applies only to
-    // full-search moves.
+    // full-search moves. A side whose root value drops below
+    // -resign_threshold resigns (>= 1 disables); a no_resign_fraction
+    // of games always plays to the end to calibrate false positives.
     SelfPlayPool(int n_games, int board_size, float komi, int simulations,
                  int cheap_simulations, float full_search_prob,
                  int temperature_moves, int leaves_per_game, int parallel,
                  float c_puct, float dirichlet_alpha, float noise_fraction,
+                 float resign_threshold, float no_resign_fraction,
                  std::uint64_t seed);
 
     bool done() const { return slots_.empty(); }
@@ -71,6 +77,11 @@ public:
 
     std::vector<GameResult> take_results();
 
+    // Resign calibration from the no-resign games: how many would
+    // have resigned, and how often the would-resigner actually won.
+    int resign_calibration_games() const { return calibration_games_; }
+    int resign_false_positives() const { return calibration_wrong_; }
+
 private:
     struct GameSlot {
         Board board;
@@ -82,6 +93,10 @@ private:
         // substitutes for new simulations, or exploration collapses.
         int sims_left = 0;
         bool full_search = true;
+        bool allow_resign = true;
+        // First side that crossed the resign threshold in a no-resign
+        // (calibration) game; Empty means none yet.
+        Stone would_resign = Stone::Empty;
         std::vector<SampleRec> samples;
 
         explicit GameSlot(int size, float komi) : board(size, komi) {}
@@ -97,7 +112,10 @@ private:
     std::unique_ptr<GameSlot> new_game();
     void begin_move(GameSlot& game);
     void play_move(GameSlot& game);
+    // Returns true when the game ended by resignation.
+    bool maybe_resign(GameSlot& game);
     void finish(GameSlot& game);
+    void finish_resigned(GameSlot& game, Stone winner);
 
     int n_games_;
     int board_size_;
@@ -108,7 +126,11 @@ private:
     int temperature_moves_;
     int leaves_per_game_;
     int max_moves_;
+    float resign_threshold_;
+    float no_resign_fraction_;
     int started_ = 0;
+    int calibration_games_ = 0;
+    int calibration_wrong_ = 0;
     Search search_;
     std::mt19937_64 rng_;
     std::vector<std::unique_ptr<GameSlot>> slots_;

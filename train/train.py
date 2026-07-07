@@ -36,6 +36,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--temperature-moves", type=int, default=8)
     parser.add_argument("--leaves-per-game", type=int, default=4)
     parser.add_argument("--noise-fraction", type=float, default=0.25)
+    parser.add_argument("--resign-threshold", type=float, default=0.95,
+                        help="side resigns below -threshold; >=1 disables")
+    parser.add_argument("--no-resign-fraction", type=float, default=0.1)
     parser.add_argument("--parallel-games", type=int, default=None)
     parser.add_argument("--no-compile", action="store_true",
                         help="disable torch.compile for self-play inference")
@@ -71,6 +74,8 @@ def save_buffer(buffer, path: Path) -> None:
                            dtype=np.float32),
              ownership=np.stack([entry[4] for entry in buffer]),
              score=np.array([entry[5] for entry in buffer],
+                            dtype=np.float32),
+             w_own=np.array([entry[6] for entry in buffer],
                             dtype=np.float32))
 
 
@@ -79,13 +84,14 @@ def load_buffer(path: Path, buffer, board_size: int) -> bool:
     if data["planes"].shape[-1] != board_size:
         print(f"ignoring {path}: board size mismatch", flush=True)
         return False
-    if "w_pi" not in data or "ownership" not in data:
+    if "w_pi" not in data or "w_own" not in data:
         print(f"ignoring {path}: old buffer format", flush=True)
         return False
     for entry in zip(data["planes"], data["pi"], data["z"], data["w_pi"],
-                     data["ownership"], data["score"]):
+                     data["ownership"], data["score"], data["w_own"]):
         buffer.append((entry[0], entry[1], float(entry[2]),
-                       float(entry[3]), entry[4], float(entry[5])))
+                       float(entry[3]), entry[4], float(entry[5]),
+                       float(entry[6])))
     return True
 
 
@@ -119,15 +125,21 @@ def train_steps(net, buffer, optimizer, device, batch_size, steps,
         target_score = torch.tensor(
             [buffer[i][5] for i in indices], dtype=torch.float32,
             device=device) / net.board_size
+        w_own = torch.tensor([buffer[i][6] for i in indices],
+                             dtype=torch.float32, device=device)
 
         logits, value, ownership, score = net(planes)
         # Playout cap randomization: cheap-search moves carry no
-        # policy target, so their weight is zero.
+        # policy target, so their weight is zero. Resigned games have
+        # no final position, so their ownership/score weight is zero.
         per_sample = -(target_pi * F.log_softmax(logits, dim=1)).sum(1)
         policy_loss = (per_sample * w_pi).sum() / w_pi.sum().clamp(min=1.0)
         value_loss = F.mse_loss(value, target_z)
-        ownership_loss = F.mse_loss(ownership, target_own)
-        score_loss = F.mse_loss(score, target_score)
+        w_own_total = w_own.sum().clamp(min=1.0)
+        ownership_loss = ((ownership - target_own).pow(2).mean(dim=1)
+                          * w_own).sum() / w_own_total
+        score_loss = ((score - target_score).pow(2)
+                      * w_own).sum() / w_own_total
         loss = (policy_loss + value_loss
                 + OWNERSHIP_WEIGHT * ownership_loss
                 + SCORE_WEIGHT * score_loss)
@@ -196,7 +208,7 @@ def main() -> None:
     for iteration in range(start_iter, args.iterations):
         start = time.time()
         net.eval()  # train_steps leaves the net in train mode
-        game_samples, margins = play_games(
+        game_samples, margins, stats = play_games(
             evaluator.evaluate_planes, args.games_per_iter,
             board_size=args.board_size, komi=args.komi,
             simulations=args.simulations,
@@ -205,7 +217,9 @@ def main() -> None:
             temperature_moves=args.temperature_moves,
             leaves_per_game=args.leaves_per_game,
             parallel=args.parallel_games,
-            noise_fraction=args.noise_fraction, rng=rng,
+            noise_fraction=args.noise_fraction,
+            resign_threshold=args.resign_threshold,
+            no_resign_fraction=args.no_resign_fraction, rng=rng,
             spectate_path=args.checkpoint_dir / "spectate.txt")
         black_wins = sum(margin > 0 for margin in margins)
         moves = sum(len(samples) for samples in game_samples)
@@ -215,7 +229,7 @@ def main() -> None:
                         sample.planes, sample.pi, args.board_size,
                         sample.ownership):
                     buffer.append((planes, pi, sample.z, sample.train_pi,
-                                   ownership, sample.score))
+                                   ownership, sample.score, sample.w_own))
         selfplay_time = time.time() - start
 
         start = time.time()
@@ -240,6 +254,8 @@ def main() -> None:
               f"avg moves {moves / args.games_per_iter:5.1f} | "
               f"p-loss {policy_loss:.4f} | v-loss {value_loss:.4f} | "
               f"o-loss {ownership_loss:.4f} | "
+              f"resign-fp {stats['resign_false_positives']}"
+              f"/{stats['resign_calibration_games']} | "
               f"selfplay {selfplay_time:5.1f}s train {train_time:5.1f}s",
               flush=True)
 

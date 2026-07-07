@@ -59,7 +59,7 @@ PYBIND11_MODULE(goboard, m) {
                              "selfplay_pool.h for the collect/submit "
                              "protocol.")
         .def(py::init<int, int, float, int, int, float, int, int, int,
-                      float, float, float, std::uint64_t>(),
+                      float, float, float, float, float, std::uint64_t>(),
              py::arg("n_games"), py::arg("board_size") = 9,
              py::arg("komi") = 7.5f, py::arg("simulations") = 128,
              py::arg("cheap_simulations") = 128,
@@ -68,7 +68,13 @@ PYBIND11_MODULE(goboard, m) {
              py::arg("leaves_per_game") = 4,
              py::arg("parallel") = 0,  // 0 means n_games
              py::arg("c_puct") = 1.5f, py::arg("dirichlet_alpha") = 0.3f,
-             py::arg("noise_fraction") = 0.25f, py::arg("seed") = 0)
+             py::arg("noise_fraction") = 0.25f,
+             py::arg("resign_threshold") = 2.0f,  // >= 1 disables
+             py::arg("no_resign_fraction") = 0.1f, py::arg("seed") = 0)
+        .def("resign_calibration_games",
+             &SelfPlayPool::resign_calibration_games)
+        .def("resign_false_positives",
+             &SelfPlayPool::resign_false_positives)
         .def("done", &SelfPlayPool::done)
         .def(
             "collect",
@@ -124,6 +130,7 @@ PYBIND11_MODULE(goboard, m) {
                 py::array_t<float> train_pi(moves);
                 py::array_t<float> ownership({moves, points});
                 py::array_t<float> score(moves);
+                py::array_t<float> w_own(moves);
                 for (int i = 0; i < moves; i++) {
                     const SampleRec& sample = result.samples[i];
                     std::copy(sample.features.begin(),
@@ -141,9 +148,11 @@ PYBIND11_MODULE(goboard, m) {
                     train_pi.mutable_at(i) =
                         sample.train_policy ? 1.0f : 0.0f;
                     score.mutable_at(i) = sample.score_target;
+                    w_own.mutable_at(i) =
+                        sample.has_ownership ? 1.0f : 0.0f;
                 }
                 out.append(py::make_tuple(features, pi, z, train_pi,
-                                          ownership, score,
+                                          ownership, score, w_own,
                                           result.black_margin));
             }
             return out;

@@ -17,7 +17,7 @@ def uniform_planes(planes):
 
 
 def test_play_games_uniform_evaluator():
-    game_samples, margins = play_games(
+    game_samples, margins, _ = play_games(
         uniform_planes, n_games=3, board_size=5, simulations=12,
         temperature_moves=4, parallel=2, rng=np.random.default_rng(0))
 
@@ -51,7 +51,7 @@ def test_spectate_file_is_written(tmp_path):
 
 
 def test_ownership_and_score_targets():
-    game_samples, margins = play_games(
+    game_samples, margins, _ = play_games(
         uniform_planes, n_games=2, board_size=5, simulations=10,
         temperature_moves=2, rng=np.random.default_rng(5))
     komi = 7.5
@@ -67,7 +67,7 @@ def test_ownership_and_score_targets():
 
 
 def test_playout_cap_randomization_flags():
-    game_samples, _ = play_games(
+    game_samples, _, _ = play_games(
         uniform_planes, n_games=2, board_size=5, simulations=12,
         cheap_simulations=6, full_search_prob=0.5, temperature_moves=2,
         rng=np.random.default_rng(3))
@@ -76,10 +76,44 @@ def test_playout_cap_randomization_flags():
     assert 0.0 in flags and 1.0 in flags
 
     # prob=1 keeps the old behavior: every move trains the policy.
-    game_samples, _ = play_games(
+    game_samples, _, _ = play_games(
         uniform_planes, n_games=1, board_size=5, simulations=8,
         temperature_moves=2, rng=np.random.default_rng(4))
     assert all(s.train_pi == 1.0 for game in game_samples for s in game)
+
+
+def black_always_losing(planes):
+    """Value says black is lost; priors uniform."""
+    priors, _ = uniform_planes(planes)
+    # Plane 2 is the black-to-play indicator.
+    black = planes[:, 2].max(axis=(1, 2)) > 0.5
+    values = np.where(black, -0.99, 0.99).astype(np.float32)
+    return priors, values
+
+
+def test_resignation_ends_games_early():
+    game_samples, margins, stats = play_games(
+        black_always_losing, n_games=4, board_size=5, simulations=12,
+        temperature_moves=0, resign_threshold=0.9, no_resign_fraction=0.0,
+        rng=np.random.default_rng(6))
+    full_length = [s for g in game_samples for s in g]
+    assert all(margin == -10000.0 for margin in margins)  # white wins
+    assert len(full_length) < 4 * 20  # far shorter than played-out games
+    for sample in full_length:
+        assert sample.w_own == 0.0  # no scored final position
+        expected = 1.0 if sample.to_play == Stone.WHITE else -1.0
+        assert sample.z == expected
+    assert stats["resign_calibration_games"] == 0
+
+
+def test_resign_calibration_counts():
+    _, margins, stats = play_games(
+        black_always_losing, n_games=3, board_size=5, simulations=12,
+        temperature_moves=0, resign_threshold=0.9, no_resign_fraction=1.0,
+        rng=np.random.default_rng(7))
+    # All games are calibration games: they play to the end...
+    assert all(abs(margin) < 10000.0 for margin in margins)
+    assert stats["resign_calibration_games"] == 3
 
 
 def test_play_games_with_net_evaluator():
@@ -87,7 +121,7 @@ def test_play_games_with_net_evaluator():
     net = PolicyValueNet(board_size=5, channels=8, blocks=1,
                          in_planes=goboard.FEATURE_PLANES)
     evaluator = NetEvaluator(net, device=torch.device("cpu"))
-    game_samples, margins = play_games(
+    game_samples, margins, _ = play_games(
         evaluator.evaluate_planes, n_games=2, board_size=5, simulations=8,
         temperature_moves=2, rng=np.random.default_rng(1))
     assert len(game_samples) == 2

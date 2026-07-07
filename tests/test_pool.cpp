@@ -24,7 +24,9 @@ static void test_pool_plays_games_to_completion() {
                       /*full_search_prob=*/0.5f, /*temperature_moves=*/4,
                       /*leaves_per_game=*/4, /*parallel=*/2,
                       /*c_puct=*/1.5f, /*dirichlet_alpha=*/0.3f,
-                      /*noise_fraction=*/0.25f, /*seed=*/42);
+                      /*noise_fraction=*/0.25f,
+                      /*resign_threshold=*/2.0f,
+                      /*no_resign_fraction=*/0.1f, /*seed=*/42);
 
     int rounds = 0;
     while (!pool.done() && rounds < 200000) {
