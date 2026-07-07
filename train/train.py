@@ -5,6 +5,7 @@ Run from the repo root, e.g.:
 """
 
 import argparse
+import signal
 import time
 from collections import deque
 from pathlib import Path
@@ -46,6 +47,33 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", type=str, default=None)
     return parser.parse_args()
+
+
+STOP_REQUESTED = False
+
+
+def _request_stop(signum, frame) -> None:
+    global STOP_REQUESTED
+    STOP_REQUESTED = True
+    print(f"signal {signum}: will save and exit after this iteration "
+          "(SIGSTOP/SIGCONT pause instantly instead)", flush=True)
+
+
+def save_buffer(buffer, path: Path) -> None:
+    np.savez(path,
+             planes=np.stack([entry[0] for entry in buffer]),
+             pi=np.stack([entry[1] for entry in buffer]),
+             z=np.array([entry[2] for entry in buffer], dtype=np.float32))
+
+
+def load_buffer(path: Path, buffer, board_size: int) -> bool:
+    data = np.load(path)
+    if data["planes"].shape[-1] != board_size:
+        print(f"ignoring {path}: board size mismatch", flush=True)
+        return False
+    for planes, pi, z in zip(data["planes"], data["pi"], data["z"]):
+        buffer.append((planes, pi, float(z)))
+    return True
 
 
 def train_steps(net, buffer, optimizer, device, batch_size, steps,
@@ -108,8 +136,17 @@ def main() -> None:
 
     buffer: deque = deque(maxlen=args.buffer_size)
     args.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    buffer_path = args.checkpoint_dir / "buffer.npz"
+    if args.resume is not None and buffer_path.exists():
+        if load_buffer(buffer_path, buffer, args.board_size):
+            print(f"restored replay buffer ({len(buffer)} samples)",
+                  flush=True)
     evaluator = NetEvaluator(net, device, compile=not args.no_compile)
 
+    signal.signal(signal.SIGTERM, _request_stop)
+    signal.signal(signal.SIGINT, _request_stop)
+
+    checkpoint = args.resume
     for iteration in range(start_iter, args.iterations):
         start = time.time()
         net.eval()  # train_steps leaves the net in train mode
@@ -154,6 +191,13 @@ def main() -> None:
               f"p-loss {policy_loss:.4f} | v-loss {value_loss:.4f} | "
               f"selfplay {selfplay_time:5.1f}s train {train_time:5.1f}s",
               flush=True)
+
+        if STOP_REQUESTED:
+            break
+
+    save_buffer(buffer, buffer_path)
+    print(f"saved replay buffer ({len(buffer)} samples); resume with "
+          f"--resume {checkpoint}", flush=True)
 
 
 if __name__ == "__main__":

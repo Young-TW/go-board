@@ -74,6 +74,19 @@ Watch the training self-play live from another terminal (read-only):
 uv run python -m train.watch --dir checkpoints
 ```
 
+Training coexists with daily use of the machine:
+
+```bash
+pkill -STOP -f train.train   # freeze instantly (free the GPU for a game)
+pkill -CONT -f train.train   # unfreeze
+pkill -TERM -f train.train   # graceful stop: finishes the iteration,
+                             # saves checkpoint + replay buffer
+```
+
+A graceful stop (or normal completion) writes `buffer.npz` next to the
+checkpoints; `--resume` restores it automatically, so pausing loses
+nothing.
+
 Compare two checkpoints head-to-head, or play against one yourself:
 
 ```bash
