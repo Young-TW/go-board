@@ -297,18 +297,22 @@ def main() -> None:
                                     "in_planes": net.in_planes},
         }, checkpoint)
 
-        print(f"iter {iteration:4d} | "
-              f"buffer {len(buffer):7d} | "
-              f"B wins {black_wins}/{args.games_per_iter} | "
-              f"avg moves {moves / args.games_per_iter:5.1f} | "
-              f"p-loss {policy_loss:.4f} | v-loss {value_loss:.4f} | "
-              f"o-loss {ownership_loss:.4f} | "
-              f"resign {'on' if resign_active else 'off'} "
-              f"fp {stats['resign_false_positives']}"
-              f"/{stats['resign_calibration_games']} | "
-              f"cache {stats['eval_cache_hits'] / max(1, stats['eval_cache_lookups']):.0%} | "
-              f"selfplay {selfplay_time:5.1f}s train {train_time:5.1f}s",
-              flush=True)
+        line = (f"iter {iteration:4d} | "
+                f"buffer {len(buffer):7d} | "
+                f"B wins {black_wins}/{args.games_per_iter} | "
+                f"avg moves {moves / args.games_per_iter:5.1f} | "
+                f"p-loss {policy_loss:.4f} | v-loss {value_loss:.4f} | "
+                f"o-loss {ownership_loss:.4f} | "
+                f"resign {'on' if resign_active else 'off'} "
+                f"fp {stats['resign_false_positives']}"
+                f"/{stats['resign_calibration_games']} | "
+                f"cache {stats['eval_cache_hits'] / max(1, stats['eval_cache_lookups']):.0%} | "
+                f"selfplay {selfplay_time:5.1f}s train {train_time:5.1f}s")
+        print(line, flush=True)
+        # Restart-proof history: stdout redirection truncates on every
+        # relaunch, which wipes the spectator's loss curves.
+        with open(args.checkpoint_dir / "history.log", "a") as history:
+            history.write(line + "\n")
 
         if STOP_REQUESTED:
             break

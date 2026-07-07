@@ -106,10 +106,14 @@ def run(stdscr, directory: Path, interval: float) -> None:
     curses.init_pair(2, curses.COLOR_YELLOW, -1)
     spectate = directory / "spectate.txt"
     log = directory / "train.log"
+    history = directory / "history.log"
 
     while True:
         header, board = read_spectate(spectate)
-        p_losses, v_losses = parse_losses(log)
+        # history.log accumulates across restarts; train.log is
+        # truncated by each relaunch's stdout redirection.
+        p_losses, v_losses = parse_losses(
+            history if history.exists() else log)
         stdscr.erase()
 
         def put(y: int, x: int, text: str, attr: int = 0) -> None:
