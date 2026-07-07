@@ -28,7 +28,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--channels", type=int, default=64)
     parser.add_argument("--blocks", type=int, default=6)
     parser.add_argument("--iterations", type=int, default=50)
-    parser.add_argument("--games-per-iter", type=int, default=20)
+    parser.add_argument("--games-per-iter", type=int, default=128)
     parser.add_argument("--simulations", type=int, default=480,
                         help="full search budget per move")
     parser.add_argument("--cheap-simulations", type=int, default=96)
@@ -42,9 +42,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--parallel-games", type=int, default=None)
     parser.add_argument("--no-compile", action="store_true",
                         help="disable torch.compile for self-play inference")
-    parser.add_argument("--buffer-size", type=int, default=100_000)
+    parser.add_argument("--buffer-size", type=int, default=600_000)
     parser.add_argument("--batch-size", type=int, default=256)
-    parser.add_argument("--steps-per-iter", type=int, default=200)
+    parser.add_argument("--steps-per-iter", type=int, default=600)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=1e-4)
     parser.add_argument("--checkpoint-dir", type=Path,
