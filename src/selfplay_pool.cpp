@@ -66,16 +66,17 @@ std::unique_ptr<SelfPlayPool::GameSlot> SelfPlayPool::new_game() {
 }
 
 bool SelfPlayPool::maybe_resign(GameSlot& game) {
-    if (resign_threshold_ >= 1.0f) return false;
-    if (game.root->value() >= -resign_threshold_) return false;
-    if (!game.allow_resign) {
-        // Calibration game: remember who would have resigned first,
-        // then play on to the end.
-        if (game.would_resign == Stone::Empty) {
-            game.would_resign = game.to_play;
-        }
-        return false;
+    // Never this early, and always track the fixed probe threshold so
+    // false-positive calibration exists even while resignation is
+    // disabled (the training loop gates activation on it).
+    if (game.move_count < board_size_) return false;
+    const double value = game.root->value();
+    if (value < -kResignProbe && game.would_resign == Stone::Empty) {
+        game.would_resign = game.to_play;
     }
+    if (resign_threshold_ >= 1.0f) return false;
+    if (value >= -resign_threshold_) return false;
+    if (!game.allow_resign) return false;
     finish_resigned(game, opponent(game.to_play));
     return true;
 }

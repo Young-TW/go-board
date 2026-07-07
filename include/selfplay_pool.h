@@ -83,6 +83,10 @@ public:
     int resign_calibration_games() const { return calibration_games_; }
     int resign_false_positives() const { return calibration_wrong_; }
 
+    // Fixed probe threshold used for calibration tracking, independent
+    // of the active resign_threshold.
+    static constexpr float kResignProbe = 0.95f;
+
     // Evaluation cache statistics for this pool's lifetime.
     long eval_cache_lookups() const { return cache_lookups_; }
     long eval_cache_hits() const { return cache_hits_; }

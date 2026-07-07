@@ -39,6 +39,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--resign-threshold", type=float, default=0.95,
                         help="side resigns below -threshold; >=1 disables")
     parser.add_argument("--no-resign-fraction", type=float, default=0.1)
+    parser.add_argument("--resign-fp-limit", type=float, default=0.05,
+                        help="enable resignation only while the measured "
+                             "false-positive rate stays below this")
     parser.add_argument("--parallel-games", type=int, default=None)
     parser.add_argument("--no-compile", action="store_true",
                         help="disable torch.compile for self-play inference")
@@ -198,6 +201,10 @@ def main() -> None:
               flush=True)
 
     buffer: deque = deque(maxlen=args.buffer_size)
+    # Resignation activates only once the measured false-positive rate
+    # over a rolling window is low: an immature value net + resignation
+    # is a self-reinforcing death spiral (learned the hard way, twice).
+    calibration_window: deque = deque(maxlen=20)
     args.checkpoint_dir.mkdir(parents=True, exist_ok=True)
     buffer_path = args.checkpoint_dir / "buffer.npz"
     if args.resume is not None and buffer_path.exists():
@@ -210,6 +217,7 @@ def main() -> None:
     signal.signal(signal.SIGINT, _request_stop)
 
     checkpoint = args.resume
+    resign_active = False
     for iteration in range(start_iter, args.iterations):
         start = time.time()
         net.eval()  # train_steps leaves the net in train mode
@@ -223,9 +231,16 @@ def main() -> None:
             leaves_per_game=args.leaves_per_game,
             parallel=args.parallel_games,
             noise_fraction=args.noise_fraction,
-            resign_threshold=args.resign_threshold,
+            resign_threshold=(args.resign_threshold if resign_active
+                              else 2.0),
             no_resign_fraction=args.no_resign_fraction, rng=rng,
             spectate_path=args.checkpoint_dir / "spectate.txt")
+        calibration_window.append(
+            (stats["resign_false_positives"],
+             stats["resign_calibration_games"]))
+        fp = sum(f for f, _ in calibration_window)
+        observed = sum(g for _, g in calibration_window)
+        resign_active = observed >= 30 and fp / observed < args.resign_fp_limit
         black_wins = sum(margin > 0 for margin in margins)
         moves = sum(len(samples) for samples in game_samples)
         for samples in game_samples:
@@ -259,7 +274,8 @@ def main() -> None:
               f"avg moves {moves / args.games_per_iter:5.1f} | "
               f"p-loss {policy_loss:.4f} | v-loss {value_loss:.4f} | "
               f"o-loss {ownership_loss:.4f} | "
-              f"resign-fp {stats['resign_false_positives']}"
+              f"resign {'on' if resign_active else 'off'} "
+              f"fp {stats['resign_false_positives']}"
               f"/{stats['resign_calibration_games']} | "
               f"cache {stats['eval_cache_hits'] / max(1, stats['eval_cache_lookups']):.0%} | "
               f"selfplay {selfplay_time:5.1f}s train {train_time:5.1f}s",
