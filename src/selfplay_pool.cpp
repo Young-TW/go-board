@@ -63,8 +63,13 @@ void SelfPlayPool::finish(GameSlot& game) {
     result.black_margin = game.board.score();
     const bool black_won = result.black_margin > 0;
     for (SampleRec& sample : game.samples) {
-        sample.z =
-            black_won == (sample.to_play == Stone::Black) ? 1.0f : -1.0f;
+        if (result.black_margin == 0.0f) {
+            sample.z = 0.0f;  // jigo
+        } else {
+            sample.z = black_won == (sample.to_play == Stone::Black)
+                           ? 1.0f
+                           : -1.0f;
+        }
     }
     result.samples = std::move(game.samples);
     results_.push_back(std::move(result));

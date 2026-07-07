@@ -20,7 +20,7 @@ from train.selfplay import Sample
 def play_games(evaluate_planes, n_games: int, board_size: int = 9,
                komi: float = 7.5, simulations: int = 128,
                temperature_moves: int = 8, leaves_per_game: int = 4,
-               parallel: int | None = None,
+               parallel: int | None = None, noise_fraction: float = 0.25,
                rng: np.random.Generator | None = None):
     """Play n_games self-play games, at most `parallel` concurrently.
 
@@ -33,6 +33,7 @@ def play_games(evaluate_planes, n_games: int, board_size: int = 9,
         n_games, board_size=board_size, komi=komi, simulations=simulations,
         temperature_moves=temperature_moves,
         leaves_per_game=leaves_per_game, parallel=parallel or 0,
+        noise_fraction=noise_fraction,
         seed=int(rng.integers(0, 2**63 - 1)))
 
     while not pool.done():

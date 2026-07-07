@@ -33,6 +33,8 @@ class Node:
 def terminal_value(board: Board, to_play: Stone) -> float:
     """Outcome of a finished game for the side to play."""
     black_margin = board.score()
+    if black_margin == 0.0:
+        return 0.0  # jigo (integer komi)
     return 1.0 if (black_margin > 0) == (to_play == Stone.BLACK) else -1.0
 
 

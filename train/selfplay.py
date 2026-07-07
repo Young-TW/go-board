@@ -88,8 +88,12 @@ def play_game(evaluate, board_size: int = 9, komi: float = 7.5,
 
     black_margin = board.score()
     for sample in samples:
-        black_won = black_margin > 0
-        sample.z = 1.0 if black_won == (sample.to_play == Stone.BLACK) else -1.0
+        if black_margin == 0.0:
+            sample.z = 0.0  # jigo
+        else:
+            black_won = black_margin > 0
+            sample.z = (1.0 if black_won == (sample.to_play == Stone.BLACK)
+                        else -1.0)
     return samples, black_margin
 
 

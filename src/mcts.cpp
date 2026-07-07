@@ -13,8 +13,9 @@ void apply_move(Board& board, int move, Stone color) {
 }
 
 float terminal_value(const Board& board, Stone to_play) {
-    const bool black_won = board.score() > 0;
-    return black_won == (to_play == Stone::Black) ? 1.0f : -1.0f;
+    const float margin = board.score();
+    if (margin == 0.0f) return 0.0f;  // jigo (integer komi)
+    return (margin > 0) == (to_play == Stone::Black) ? 1.0f : -1.0f;
 }
 
 Search::Search(float c_puct, float dirichlet_alpha, float noise_fraction,

@@ -31,6 +31,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--simulations", type=int, default=128)
     parser.add_argument("--temperature-moves", type=int, default=8)
     parser.add_argument("--leaves-per-game", type=int, default=4)
+    parser.add_argument("--noise-fraction", type=float, default=0.25)
     parser.add_argument("--parallel-games", type=int, default=None)
     parser.add_argument("--no-compile", action="store_true",
                         help="disable torch.compile for self-play inference")
@@ -118,7 +119,8 @@ def main() -> None:
             simulations=args.simulations,
             temperature_moves=args.temperature_moves,
             leaves_per_game=args.leaves_per_game,
-            parallel=args.parallel_games, rng=rng)
+            parallel=args.parallel_games,
+            noise_fraction=args.noise_fraction, rng=rng)
         black_wins = sum(margin > 0 for margin in margins)
         moves = sum(len(samples) for samples in game_samples)
         for samples in game_samples:
