@@ -1,16 +1,16 @@
 """AlphaZero-style policy/value network for goboard positions.
 
-Input is goboard.Board.features(): (N, 3, size, size) float32.
-The policy head emits size*size + 1 logits, flattened as y * size + x,
-with the last index meaning pass. The value head predicts the side to
-play's expected outcome in [-1, 1].
+Input is goboard.Board.features(): (N, in_planes, size, size) float32
+(in_planes defaults to 3 for checkpoints trained on the v1 encoding;
+new nets use all goboard.FEATURE_PLANES planes). The policy head emits
+size*size + 1 logits, flattened as y * size + x, with the last index
+meaning pass. The value head predicts the side to play's expected
+outcome in [-1, 1].
 """
 
 import torch
 import torch.nn.functional as F
 from torch import nn
-
-IN_PLANES = 3  # must match goboard.Board.features()
 
 
 def default_device() -> torch.device:
@@ -34,13 +34,14 @@ class ResidualBlock(nn.Module):
 
 class PolicyValueNet(nn.Module):
     def __init__(self, board_size: int = 9, channels: int = 64,
-                 blocks: int = 6):
+                 blocks: int = 6, in_planes: int = 3):
         super().__init__()
         self.board_size = board_size
+        self.in_planes = in_planes
         points = board_size * board_size
 
         self.stem = nn.Sequential(
-            nn.Conv2d(IN_PLANES, channels, 3, padding=1, bias=False),
+            nn.Conv2d(in_planes, channels, 3, padding=1, bias=False),
             nn.BatchNorm2d(channels),
             nn.ReLU(inplace=True),
         )

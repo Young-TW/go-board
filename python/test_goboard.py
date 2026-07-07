@@ -29,7 +29,7 @@ def main() -> None:
     assert len(board.legal_moves(Stone.BLACK)) == 9 * 9 - 2
 
     planes = board.features(Stone.BLACK)
-    assert planes.shape == (3, 9, 9)
+    assert planes.shape == (goboard.FEATURE_PLANES, 9, 9)
     assert planes.dtype == np.float32
     assert planes[0, 0, 1] == 1.0  # black stone at x=1, y=0
     assert planes[2].min() == 1.0  # black to play

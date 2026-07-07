@@ -17,6 +17,7 @@ PYBIND11_MODULE(goboard, m) {
         .value("WHITE", Stone::White);
 
     m.def("opponent", &opponent, py::arg("color"));
+    m.attr("FEATURE_PLANES") = Board::kFeaturePlanes;
 
     py::class_<Board>(m, "Board")
         .def(py::init<int, float>(), py::arg("size") = 19,
@@ -43,12 +44,12 @@ PYBIND11_MODULE(goboard, m) {
             [](const Board& board, Stone to_play) {
                 const int n = board.size();
                 const std::vector<float> data = board.features(to_play);
-                py::array_t<float> planes({3, n, n});
+                py::array_t<float> planes({Board::kFeaturePlanes, n, n});
                 std::copy(data.begin(), data.end(), planes.mutable_data());
                 return planes;
             },
             py::arg("to_play"),
-            "float32 array of shape (3, size, size): own stones, opponent "
-            "stones, colour-to-play indicator.")
+            "float32 array of shape (FEATURE_PLANES, size, size); see "
+            "board.h for the plane layout.")
         .def("__str__", &Board::to_string);
 }

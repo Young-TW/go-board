@@ -192,13 +192,27 @@ std::vector<int> Board::legal_moves(Stone color) const {
 
 std::vector<float> Board::features(Stone to_play) const {
     const int points = size_ * size_;
-    const Stone enemy = opponent(to_play);
-    std::vector<float> planes(3 * points, 0.0f);
+    std::vector<float> planes(kFeaturePlanes * points, 0.0f);
+    // Planes 0/1: own/opponent stones; 2: 1.0 everywhere if black to
+    // play; 3/4: own/opponent chains in atari (one liberty);
+    // 5/6: own/opponent chains with exactly two liberties. The first
+    // three match the v1 encoding so older nets keep working.
+    std::vector<char> seen(points, 0);
+    std::vector<int> chain;
     for (int i = 0; i < points; i++) {
-        if (point_[i] == to_play) {
-            planes[i] = 1.0f;
-        } else if (point_[i] == enemy) {
-            planes[points + i] = 1.0f;
+        if (point_[i] == Stone::Empty) continue;
+        const bool own = point_[i] == to_play;
+        planes[(own ? 0 : 1) * points + i] = 1.0f;
+        if (seen[i]) continue;
+        const int libs = chain_liberties(i, chain);
+        int liberty_plane = -1;
+        if (libs == 1) liberty_plane = own ? 3 : 4;
+        if (libs == 2) liberty_plane = own ? 5 : 6;
+        for (int c : chain) {
+            seen[c] = 1;
+            if (liberty_plane >= 0) {
+                planes[liberty_plane * points + c] = 1.0f;
+            }
         }
     }
     if (to_play == Stone::Black) {

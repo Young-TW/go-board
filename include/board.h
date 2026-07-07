@@ -38,9 +38,13 @@ public:
     // always available and not included.
     std::vector<int> legal_moves(Stone color) const;
 
-    // Neural-net input: 3 planes of size*size floats, plane-major.
-    // Plane 0: stones of to_play, plane 1: opponent stones,
-    // plane 2: constant 1.0 if to_play is black, else 0.0.
+    // Number of feature planes emitted by features().
+    static constexpr int kFeaturePlanes = 7;
+
+    // Neural-net input: kFeaturePlanes planes of size*size floats,
+    // plane-major. 0: own stones, 1: opponent stones, 2: constant 1.0
+    // if black to play, 3/4: own/opponent chains in atari, 5/6:
+    // own/opponent chains with exactly two liberties.
     std::vector<float> features(Stone to_play) const;
 
     std::string to_string() const;

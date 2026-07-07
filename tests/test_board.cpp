@@ -202,19 +202,27 @@ static void test_features_planes() {
     Board board(5);
     board.play(1, 1, B);
     board.play(3, 3, W);
-    const int points = 5 * 5;
+    board.play(0, 0, W);
+    board.play(1, 0, B);  // white (0,0) is now in atari
+    board.play(0, 4, B);  // corner chain with exactly two liberties
+    const unsigned points = 5 * 5;
 
     const auto black_view = board.features(B);
-    CHECK(black_view.size() == 3u * points);
+    CHECK(black_view.size() == Board::kFeaturePlanes * points);
     CHECK(black_view[1 * 5 + 1] == 1.0f);           // own stone
     CHECK(black_view[points + 3 * 5 + 3] == 1.0f);  // opponent stone
     CHECK(black_view[3 * 5 + 3] == 0.0f);
-    CHECK(black_view[2 * points] == 1.0f);  // black-to-play plane
+    CHECK(black_view[2 * points] == 1.0f);          // black-to-play plane
+    CHECK(black_view[4 * points + 0] == 1.0f);      // opponent atari (0,0)
+    CHECK(black_view[3 * points + 0] == 0.0f);
+    CHECK(black_view[5 * points + 4 * 5 + 0] == 1.0f);  // own two liberties
+    CHECK(black_view[5 * points + 1 * 5 + 1] == 0.0f);  // (1,1) has more
 
     const auto white_view = board.features(W);
     CHECK(white_view[3 * 5 + 3] == 1.0f);           // own stone
     CHECK(white_view[points + 1 * 5 + 1] == 1.0f);  // opponent stone
-    CHECK(white_view[2 * points] == 0.0f);  // white to play
+    CHECK(white_view[2 * points] == 0.0f);          // white to play
+    CHECK(white_view[3 * points + 0] == 1.0f);      // own atari at (0,0)
 }
 
 int main() {

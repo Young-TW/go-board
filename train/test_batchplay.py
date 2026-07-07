@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 
+import goboard
 from goboard import Stone
 
 from train.batchplay import play_games
@@ -25,7 +26,7 @@ def test_play_games_uniform_evaluator():
         assert samples
         black_won = margin > 0
         for sample in samples:
-            assert sample.planes.shape == (3, 5, 5)
+            assert sample.planes.shape == (goboard.FEATURE_PLANES, 5, 5)
             assert sample.pi.shape == (26,)
             assert abs(sample.pi.sum() - 1.0) < 1e-5
             expected = (1.0 if black_won == (sample.to_play == Stone.BLACK)

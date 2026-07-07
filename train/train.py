@@ -13,6 +13,8 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
+import goboard
+
 from train.batchplay import play_games
 from train.net import PolicyValueNet, default_device
 from train.selfplay import NetEvaluator, symmetries
@@ -51,7 +53,8 @@ def train_steps(net, buffer, optimizer, device, batch_size, steps,
     for _ in range(steps):
         indices = rng.choice(len(buffer), size=batch_size)
         planes = torch.from_numpy(
-            np.stack([buffer[i][0] for i in indices])).to(device)
+            np.stack([buffer[i][0]
+                      for i in indices])[:, :net.in_planes]).to(device)
         target_pi = torch.from_numpy(
             np.stack([buffer[i][1] for i in indices])).to(device)
         target_z = torch.tensor(
@@ -77,13 +80,17 @@ def main() -> None:
     rng = np.random.default_rng(args.seed)
     torch.manual_seed(args.seed)
 
-    net = PolicyValueNet(args.board_size, args.channels, args.blocks)
-    start_iter = 0
     state = None
+    start_iter = 0
+    in_planes = goboard.FEATURE_PLANES
     if args.resume is not None:
         state = torch.load(args.resume, map_location="cpu", weights_only=True)
-        net.load_state_dict(state["model"])
+        in_planes = state["config"].get("in_planes", 3)
         start_iter = state["iteration"] + 1
+    net = PolicyValueNet(args.board_size, args.channels, args.blocks,
+                         in_planes)
+    if state is not None:
+        net.load_state_dict(state["model"])
     net.to(device)
     # Create the optimizer only once the model is on its device, so a
     # resumed optimizer state is cast onto the parameters' device too.
@@ -126,7 +133,8 @@ def main() -> None:
             "optimizer": optimizer.state_dict(),
             "iteration": iteration,
             "config": vars(args) | {"checkpoint_dir": str(args.checkpoint_dir),
-                                    "resume": None},
+                                    "resume": None,
+                                    "in_planes": net.in_planes},
         }, checkpoint)
 
         print(f"iter {iteration:4d} | "

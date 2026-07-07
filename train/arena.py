@@ -25,7 +25,8 @@ def load_evaluator(path: Path, device) -> tuple[NetEvaluator, dict]:
     state = torch.load(path, map_location="cpu", weights_only=True)
     config = state["config"]
     net = PolicyValueNet(config["board_size"], config["channels"],
-                         config["blocks"])
+                         config["blocks"],
+                         in_planes=config.get("in_planes", 3))
     net.load_state_dict(state["model"])
     return NetEvaluator(net, device), config
 
