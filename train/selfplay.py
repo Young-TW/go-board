@@ -38,18 +38,55 @@ class NetEvaluator:
             [board.features(to_play) for board, to_play in positions])
         return self.evaluate_planes(planes)
 
+    def _ensure_buffers(self, count: int, plane_shape, stride: int) -> None:
+        """(Re)allocate persistent pinned staging buffers."""
+        if getattr(self, "_in_buf", None) is not None \
+                and self._in_buf.shape[0] >= count \
+                and self._in_buf.shape[1:] == plane_shape:
+            return
+        capacity = max(count, 2 * getattr(self, "_capacity", 0))
+        self._capacity = capacity
+        self._in_buf = torch.empty((capacity, *plane_shape),
+                                   dtype=torch.float32, pin_memory=True)
+        self._out_priors = torch.empty((capacity, stride),
+                                       dtype=torch.float32, pin_memory=True)
+        self._out_values = torch.empty(capacity, dtype=torch.float32,
+                                       pin_memory=True)
+
     def evaluate_planes(self, planes):
-        """Evaluate a (count, planes, size, size) float32 batch."""
+        """Evaluate a (count, planes, size, size) float32 batch.
+
+        On CUDA the returned arrays are views of persistent pinned
+        buffers, valid until the next call — callers must consume them
+        immediately (SelfPlayPool.submit copies synchronously).
+        """
         # Nets trained on the older, smaller encoding use a prefix of
         # the feature planes.
         planes = planes[:, :self.net.in_planes]
-        x = torch.from_numpy(np.ascontiguousarray(planes)).to(self.device)
-        with torch.no_grad(), torch.autocast(
-                device_type=self.device.type, dtype=torch.bfloat16,
-                enabled=self.autocast):
+        autocast = torch.autocast(device_type=self.device.type,
+                                  dtype=torch.bfloat16,
+                                  enabled=self.autocast)
+        if self.device.type != "cuda":
+            x = torch.from_numpy(np.ascontiguousarray(planes))
+            with torch.no_grad(), autocast:
+                logits, values, _, _ = self.forward(x)
+            probs = torch.softmax(logits.float(), dim=1).numpy()
+            return probs, values.float().numpy()
+
+        count = planes.shape[0]
+        stride = planes.shape[-1] ** 2 + 1
+        self._ensure_buffers(count, planes.shape[1:], stride)
+        stage = self._in_buf[:count]
+        stage.copy_(torch.from_numpy(np.ascontiguousarray(planes)))
+        x = stage.to(self.device, non_blocking=True)
+        with torch.no_grad(), autocast:
             logits, values, _, _ = self.forward(x)
-        probs = torch.softmax(logits.float(), dim=1).cpu().numpy()
-        return probs, values.float().cpu().numpy()
+        probs = torch.softmax(logits.float(), dim=1)
+        self._out_priors[:count].copy_(probs, non_blocking=True)
+        self._out_values[:count].copy_(values.float(), non_blocking=True)
+        torch.cuda.synchronize()
+        return (self._out_priors[:count].numpy(),
+                self._out_values[:count].numpy())
 
 
 @dataclass
