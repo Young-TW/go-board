@@ -72,8 +72,12 @@ Compare two checkpoints head-to-head, or play against one yourself:
 
 ```bash
 uv run python -m train.arena checkpoints/iter_0059.pt checkpoints/iter_0019.pt
-uv run python -m train.play checkpoints/iter_0059.pt --human black
+uv run python -m train.play checkpoints/iter_0059.pt --human black   # line mode
+uv run python -m train.tui checkpoints/iter_0059.pt --human black    # curses TUI
 ```
+
+The TUI takes arrow keys/hjkl or mouse clicks to move, Enter/Space to
+play, `p` to pass, `q` to quit.
 
 ## Test
 
