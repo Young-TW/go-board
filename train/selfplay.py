@@ -36,10 +36,14 @@ class NetEvaluator:
         """Evaluate [(board, to_play), ...] in one forward pass."""
         planes = np.stack(
             [board.features(to_play) for board, to_play in positions])
+        return self.evaluate_planes(planes)
+
+    def evaluate_planes(self, planes):
+        """Evaluate a (count, planes, size, size) float32 batch."""
         # Nets trained on the older, smaller encoding use a prefix of
         # the feature planes.
         planes = planes[:, :self.net.in_planes]
-        x = torch.from_numpy(planes).to(self.device)
+        x = torch.from_numpy(np.ascontiguousarray(planes)).to(self.device)
         with torch.no_grad(), torch.autocast(
                 device_type=self.device.type, dtype=torch.bfloat16,
                 enabled=self.autocast):

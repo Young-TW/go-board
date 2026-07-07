@@ -10,7 +10,8 @@ if(SKBUILD)
     set(GO_BOARD_PYTHON ON)
 endif()
 
-add_library(go_board_core STATIC src/board.cpp)
+add_library(go_board_core STATIC src/board.cpp src/mcts.cpp
+                                 src/selfplay_pool.cpp)
 target_include_directories(go_board_core PUBLIC include)
 set_target_properties(go_board_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
@@ -21,6 +22,10 @@ enable_testing()
 add_executable(board_tests tests/test_board.cpp)
 target_link_libraries(board_tests PRIVATE go_board_core)
 add_test(NAME board_tests COMMAND board_tests)
+
+add_executable(pool_tests tests/test_pool.cpp)
+target_link_libraries(pool_tests PRIVATE go_board_core)
+add_test(NAME pool_tests COMMAND pool_tests)
 
 if(GO_BOARD_PYTHON)
     find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)

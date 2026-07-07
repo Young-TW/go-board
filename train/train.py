@@ -113,7 +113,7 @@ def main() -> None:
         start = time.time()
         net.eval()  # train_steps leaves the net in train mode
         game_samples, margins = play_games(
-            evaluator.evaluate_batch, args.games_per_iter,
+            evaluator.evaluate_planes, args.games_per_iter,
             board_size=args.board_size, komi=args.komi,
             simulations=args.simulations,
             temperature_moves=args.temperature_moves,

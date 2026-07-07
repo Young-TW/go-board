@@ -5,6 +5,7 @@
 #include <algorithm>
 
 #include "board.h"
+#include "selfplay_pool.h"
 
 namespace py = pybind11;
 
@@ -52,4 +53,77 @@ PYBIND11_MODULE(goboard, m) {
             "float32 array of shape (FEATURE_PLANES, size, size); see "
             "board.h for the plane layout.")
         .def("__str__", &Board::to_string);
+
+    py::class_<SelfPlayPool>(m, "SelfPlayPool",
+                             "Batched C++ self-play driver; see "
+                             "selfplay_pool.h for the collect/submit "
+                             "protocol.")
+        .def(py::init<int, int, float, int, int, int, int, float, float,
+                      float, std::uint64_t>(),
+             py::arg("n_games"), py::arg("board_size") = 9,
+             py::arg("komi") = 7.5f, py::arg("simulations") = 128,
+             py::arg("temperature_moves") = 8,
+             py::arg("leaves_per_game") = 4,
+             py::arg("parallel") = 0,  // 0 means n_games
+             py::arg("c_puct") = 1.5f, py::arg("dirichlet_alpha") = 0.3f,
+             py::arg("noise_fraction") = 0.25f, py::arg("seed") = 0)
+        .def("done", &SelfPlayPool::done)
+        .def(
+            "collect",
+            [](SelfPlayPool& pool) {
+                int count;
+                {
+                    py::gil_scoped_release release;
+                    count = pool.collect();
+                }
+                const int n = pool.board_size();
+                py::array_t<float> planes(
+                    {count, Board::kFeaturePlanes, n, n});
+                std::copy(pool.features().begin(), pool.features().end(),
+                          planes.mutable_data());
+                return planes;
+            },
+            "Advance all games and return the feature batch to "
+            "evaluate, shape (count, FEATURE_PLANES, size, size).")
+        .def(
+            "submit",
+            [](SelfPlayPool& pool,
+               py::array_t<float, py::array::c_style | py::array::forcecast>
+                   priors,
+               py::array_t<float, py::array::c_style | py::array::forcecast>
+                   values) {
+                const int count = int(priors.shape(0));
+                if (count == 0) return;
+                const float* prior_data = priors.data();
+                const float* value_data = values.data();
+                py::gil_scoped_release release;
+                pool.submit(prior_data, value_data, count);
+            },
+            py::arg("priors"), py::arg("values"))
+        .def("take_results", [](SelfPlayPool& pool) {
+            const int n = pool.board_size();
+            const int points = n * n;
+            py::list out;
+            for (GameResult& result : pool.take_results()) {
+                const int moves = int(result.samples.size());
+                py::array_t<float> features(
+                    {moves, Board::kFeaturePlanes, n, n});
+                py::array_t<float> pi({moves, points + 1});
+                py::array_t<float> z(moves);
+                for (int i = 0; i < moves; i++) {
+                    const SampleRec& sample = result.samples[i];
+                    std::copy(sample.features.begin(),
+                              sample.features.end(),
+                              features.mutable_data() +
+                                  std::size_t(i) * sample.features.size());
+                    std::copy(sample.pi.begin(), sample.pi.end(),
+                              pi.mutable_data() +
+                                  std::size_t(i) * sample.pi.size());
+                    z.mutable_at(i) = sample.z;
+                }
+                out.append(py::make_tuple(features, pi, z,
+                                          result.black_margin));
+            }
+            return out;
+        });
 }
