@@ -22,6 +22,10 @@ cd /work/young0nchc/go-board
 
 export OMP_NUM_THREADS=4  # per process; workers also cap themselves
 
+# The goboard extension is an installed wheel: rebuild it so it always
+# matches the checked-out C++/bindings sources.
+$HOME/.local/bin/uv pip install -q --python .venv/bin/python .
+
 CKPT_DIR=checkpoints-19
 RESUME=""
 LATEST=$(ls -t "$CKPT_DIR"/iter_*.pt 2>/dev/null | head -1)
