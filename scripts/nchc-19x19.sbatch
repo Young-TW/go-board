@@ -8,7 +8,7 @@
 # triggers the trainer's graceful save of checkpoint + buffer.
 #
 #SBATCH -J goboard-19
-#SBATCH -A acd114123
+#SBATCH -A ACD114124
 #SBATCH -p 8gpus
 #SBATCH -N 1
 #SBATCH --gres=gpu:8
