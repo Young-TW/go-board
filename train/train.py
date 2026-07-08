@@ -94,6 +94,10 @@ def load_buffer(path: Path, buffer, board_size: int) -> bool:
     if data["planes"].shape[-1] != board_size:
         print(f"ignoring {path}: board size mismatch", flush=True)
         return False
+    if data["planes"].shape[1] != goboard.FEATURE_PLANES:
+        print(f"ignoring {path}: feature plane count mismatch",
+              flush=True)
+        return False
     if "w_pi" not in data or "w_own" not in data:
         print(f"ignoring {path}: old buffer format", flush=True)
         return False
