@@ -96,7 +96,23 @@ uv run python -m train.tui checkpoints/iter_0059.pt --human black    # curses TU
 ```
 
 The TUI takes arrow keys/hjkl or mouse clicks to move, Enter/Space to
-play, `p` to pass, `q` to quit.
+play, `p` to pass, `q` to quit. `--sgf game.sgf` saves the record
+(also available on `train.play` and per-game via `train.arena
+--sgf-dir games/`).
+
+Standard GUIs and engine matches go through GTP:
+
+```bash
+uv run python -m train.gtp checkpoints/iter_0100.pt --simulations 512
+```
+
+Track strength automatically while training runs — every 25th
+checkpoint plays a fixed anchor, results land in `checkpoints/elo.log`
+(shown in the spectator too):
+
+```bash
+uv run python -m train.elo --anchor checkpoints/run1/iter_0059.pt
+```
 
 ## Test
 
