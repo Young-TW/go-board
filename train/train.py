@@ -195,12 +195,14 @@ def main() -> None:
 
     state = None
     start_iter = 0
+    upgraded_planes = False
     in_planes = goboard.FEATURE_PLANES
     if args.resume is not None:
         state = load_checkpoint(args.resume)
         start_iter = state["iteration"] + 1
         ckpt_planes = state["config"].get("in_planes", 3)
         if ckpt_planes != in_planes:
+            upgraded_planes = True
             # Upgrade across feature-plane growth: copy the stem
             # kernels for the old planes and zero-init the new ones,
             # so the upgraded net starts out functionally identical.
@@ -228,11 +230,18 @@ def main() -> None:
     optimizer = torch.optim.AdamW(net.parameters(), lr=args.lr,
                                   weight_decay=args.weight_decay)
     if state is not None:
-        try:
-            optimizer.load_state_dict(state["optimizer"])
-        except (RuntimeError, ValueError):
-            print("optimizer state incompatible after architecture "
-                  "change; starting it fresh", flush=True)
+        # A plane upgrade reshapes the stem parameter; the saved
+        # optimizer moments no longer match it (load_state_dict does
+        # not validate shapes — it crashes at the first step).
+        if upgraded_planes:
+            print("optimizer state reset after feature plane upgrade",
+                  flush=True)
+        else:
+            try:
+                optimizer.load_state_dict(state["optimizer"])
+            except (RuntimeError, ValueError):
+                print("optimizer state incompatible after architecture "
+                      "change; starting it fresh", flush=True)
         print(f"resumed from {args.resume} at iteration {start_iter}",
               flush=True)
 
