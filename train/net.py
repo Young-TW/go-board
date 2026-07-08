@@ -49,6 +49,63 @@ class ResidualBlock(nn.Module):
 
 
 class PolicyValueNet(nn.Module):
+    """Size-independent (v2) net: the policy is a per-point conv map
+    plus a pooled pass logit, and every scalar head reads a globally
+    pooled trunk, so one set of weights plays any board size.
+    board_size is kept only as checkpoint metadata."""
+
+    ARCH = "v2"
+
+    def __init__(self, board_size: int = 9, channels: int = 64,
+                 blocks: int = 6, in_planes: int = 3):
+        super().__init__()
+        self.board_size = board_size
+        self.in_planes = in_planes
+
+        self.stem = nn.Sequential(
+            nn.Conv2d(in_planes, channels, 3, padding=1, bias=False),
+            nn.BatchNorm2d(channels),
+            nn.ReLU(inplace=True),
+        )
+        self.tower = nn.Sequential(
+            *[ResidualBlock(channels) for _ in range(blocks)])
+        self.policy_conv = nn.Conv2d(channels, 1, 1)
+        self.pool_trunk = nn.Sequential(
+            nn.Conv2d(channels, 32, 1, bias=False),
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
+        )
+        self.pass_fc = nn.Linear(32, 1)
+        self.value_fc = nn.Sequential(
+            nn.Linear(32, 64),
+            nn.ReLU(inplace=True),
+            nn.Linear(64, 1),
+            nn.Tanh(),
+        )
+        self.score_fc = nn.Linear(32, 1)
+        self.ownership_head = nn.Sequential(
+            nn.Conv2d(channels, 1, 1),
+            nn.Tanh(),
+            nn.Flatten(),
+        )
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor,
+                                                torch.Tensor, torch.Tensor]:
+        trunk = self.tower(self.stem(x))
+        board_logits = self.policy_conv(trunk).flatten(1)  # (N, points)
+        pooled = self.pool_trunk(trunk).mean(dim=(2, 3))   # (N, 32)
+        logits = torch.cat([board_logits, self.pass_fc(pooled)], dim=1)
+        value = self.value_fc(pooled).squeeze(-1)
+        score = self.score_fc(pooled).squeeze(-1)
+        return logits, value, self.ownership_head(trunk), score
+
+
+class LegacyPolicyValueNet(nn.Module):
+    """v1 architecture with fixed-size linear heads; kept so old
+    checkpoints (run1..run5) remain loadable for arena and play."""
+
+    ARCH = "v1"
+
     def __init__(self, board_size: int = 9, channels: int = 64,
                  blocks: int = 6, in_planes: int = 3):
         super().__init__()

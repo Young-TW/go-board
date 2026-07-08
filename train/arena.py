@@ -17,7 +17,8 @@ import goboard
 from goboard import Board, Stone
 
 from train.mcts import MCTS, apply_move
-from train.net import PolicyValueNet, default_device, load_checkpoint
+from train.net import (LegacyPolicyValueNet, PolicyValueNet,
+                       default_device, load_checkpoint)
 from train.selfplay import NetEvaluator
 from train.sgf import margin_to_result, save_sgf
 
@@ -25,9 +26,11 @@ from train.sgf import margin_to_result, save_sgf
 def load_evaluator(path: Path, device) -> tuple[NetEvaluator, dict]:
     state = load_checkpoint(path)
     config = state["config"]
-    net = PolicyValueNet(config["board_size"], config["channels"],
-                         config["blocks"],
-                         in_planes=config.get("in_planes", 3))
+    arch = config.get("arch", "v1")
+    net_class = PolicyValueNet if arch == "v2" else LegacyPolicyValueNet
+    net = net_class(config["board_size"], config["channels"],
+                    config["blocks"],
+                    in_planes=config.get("in_planes", 3))
     try:
         net.load_state_dict(state["model"])
     except RuntimeError:

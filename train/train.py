@@ -335,7 +335,8 @@ def main() -> None:
             "iteration": iteration,
             "config": vars(args) | {"checkpoint_dir": str(args.checkpoint_dir),
                                     "resume": None,
-                                    "in_planes": net.in_planes},
+                                    "in_planes": net.in_planes,
+                                    "arch": net.ARCH},
         }, checkpoint)
 
         line = (f"iter {iteration:4d} | "
