@@ -15,8 +15,16 @@ from train.batchplay import play_games
 
 
 def _worker_loop(device_id: int, net_kwargs: dict, in_queue, out_queue):
+    import signal
+
     from train.net import PolicyValueNet
     from train.selfplay import NetEvaluator
+
+    # Graceful-stop signals (e.g. scancel --signal=TERM --full hits
+    # every process in the job) are the trainer's business; a worker
+    # dying mid-request leaves the trainer waiting forever.
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
 
     # Inference runs on the GPU; a fat default OMP pool per worker
     # just thrashes the job's CPU allocation (observed: 8 H200s at 2%).
