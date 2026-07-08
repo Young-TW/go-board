@@ -3,14 +3,18 @@ from pathlib import Path
 
 import numpy as np
 
+import goboard
+
 from train.train import load_buffer, save_buffer
+
+PLANES = goboard.FEATURE_PLANES
 
 
 def test_buffer_roundtrip(tmp_path):
     buffer = deque(maxlen=100)
     rng = np.random.default_rng(0)
     for i in range(10):
-        buffer.append((rng.random((7, 5, 5)).astype(np.float32),
+        buffer.append((rng.random((PLANES, 5, 5)).astype(np.float32),
                        rng.random(26).astype(np.float32), 1.0,
                        float(i % 2),
                        rng.random(25).astype(np.float32), 3.5, 1.0))
