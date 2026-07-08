@@ -51,6 +51,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--steps-per-iter", type=int, default=600)
     parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--lr-min-factor", type=float, default=0.05,
+                        help="cosine-decay floor as a fraction of --lr")
     parser.add_argument("--weight-decay", type=float, default=1e-4)
     parser.add_argument("--checkpoint-dir", type=Path,
                         default=Path("checkpoints"))
@@ -235,6 +237,15 @@ def main() -> None:
     checkpoint = args.resume
     resign_active = False
     for iteration in range(start_iter, args.iterations):
+        # Cosine decay from --lr to its floor across the whole run;
+        # recomputed from the iteration number, so it is resume-safe.
+        progress = iteration / max(1, args.iterations - 1)
+        lr = args.lr * (args.lr_min_factor
+                        + (1 - args.lr_min_factor)
+                        * 0.5 * (1 + np.cos(np.pi * progress)))
+        for group in optimizer.param_groups:
+            group["lr"] = lr
+
         start = time.time()
         net.eval()  # train_steps leaves the net in train mode
         game_samples, margins, stats = play_games(
@@ -307,6 +318,7 @@ def main() -> None:
                 f"fp {stats['resign_false_positives']}"
                 f"/{stats['resign_calibration_games']} | "
                 f"cache {stats['eval_cache_hits'] / max(1, stats['eval_cache_lookups']):.0%} | "
+                f"lr {lr:.1e} | "
                 f"selfplay {selfplay_time:5.1f}s train {train_time:5.1f}s")
         print(line, flush=True)
         # Restart-proof history: stdout redirection truncates on every
