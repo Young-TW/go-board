@@ -19,6 +19,7 @@ from goboard import Board, Stone
 from train.mcts import MCTS, apply_move
 from train.net import PolicyValueNet, default_device
 from train.selfplay import NetEvaluator
+from train.sgf import margin_to_result, save_sgf
 
 
 def load_evaluator(path: Path, device) -> tuple[NetEvaluator, dict]:
@@ -38,9 +39,11 @@ def load_evaluator(path: Path, device) -> tuple[NetEvaluator, dict]:
 
 def play_match(evaluators: dict, board_size: int, komi: float,
                simulations: int, temperature_moves: int,
-               rng: np.random.Generator) -> float:
+               rng: np.random.Generator,
+               moves_out: list | None = None) -> float:
     """One game; evaluators maps Stone.BLACK/WHITE to an evaluator.
-    Returns the black margin."""
+    Returns the black margin; appends (color, point|None) records to
+    moves_out when given (for SGF export)."""
     searchers = {color: MCTS(evaluate, rng=rng)
                  for color, evaluate in evaluators.items()}
     board = Board(size=board_size, komi=komi)
@@ -53,6 +56,10 @@ def play_match(evaluators: dict, board_size: int, komi: float,
         root = mcts.run(board, to_play, simulations, add_noise=False)
         temperature = 0.25 if move_count < temperature_moves else 0.0
         move = mcts.select_move(root, board_size, temperature)
+        if moves_out is not None:
+            point = (None if move == board_size * board_size
+                     else (move % board_size, move // board_size))
+            moves_out.append((to_play, point))
         apply_move(board, move, to_play)
         to_play = goboard.opponent(to_play)
     return board.score()
@@ -68,6 +75,8 @@ def main() -> None:
     parser.add_argument("--temperature-moves", type=int, default=6)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", type=str, default=None)
+    parser.add_argument("--sgf-dir", type=Path, default=None,
+                        help="save each game as an SGF file here")
     args = parser.parse_args()
 
     device = torch.device(args.device) if args.device else default_device()
@@ -83,9 +92,16 @@ def main() -> None:
             Stone.BLACK: eval_a if a_is_black else eval_b,
             Stone.WHITE: eval_b if a_is_black else eval_a,
         }
+        moves: list = []
         black_margin = play_match(evaluators, board_size, args.komi,
                                   args.simulations, args.temperature_moves,
-                                  rng)
+                                  rng, moves_out=moves)
+        if args.sgf_dir is not None:
+            black = (args.ckpt_a if a_is_black else args.ckpt_b).stem
+            white = (args.ckpt_b if a_is_black else args.ckpt_a).stem
+            save_sgf(args.sgf_dir / f"game_{game + 1:03d}.sgf", moves,
+                     board_size, args.komi, margin_to_result(black_margin),
+                     black=black, white=white)
         a_won = (black_margin > 0) == a_is_black
         wins_a += a_won
         print(f"game {game + 1:3d}: {args.ckpt_a.name} as "

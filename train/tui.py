@@ -18,6 +18,7 @@ from goboard import Board, Stone
 
 from train.arena import load_evaluator
 from train.mcts import MCTS, apply_move
+from train.sgf import margin_to_result, save_sgf
 
 MARGIN_Y = 2   # rows above the board (column labels)
 MARGIN_X = 4   # columns left of the board (row labels)
@@ -53,9 +54,12 @@ class Game:
         self.last_move: tuple[int, int] | None = None
         self.value: float | None = None
         self.message = ""
+        self.moves: list = []
 
     def apply(self, move: int) -> None:
         size = self.board.size
+        self.moves.append((self.to_play, None if move == size * size
+                           else (move % size, move // size)))
         apply_move(self.board, move, self.to_play)
         self.last_move = (None if move == size * size
                           else (move % size, move // size))
@@ -178,6 +182,8 @@ def main() -> None:
     parser.add_argument("--simulations", type=int, default=256)
     parser.add_argument("--komi", type=float, default=7.5)
     parser.add_argument("--device", type=str, default=None)
+    parser.add_argument("--sgf", type=Path, default=None,
+                        help="save the game record here")
     args = parser.parse_args()
 
     device = torch.device(args.device) if args.device else None
@@ -186,6 +192,14 @@ def main() -> None:
     game = Game(evaluate, config["board_size"], args.komi, human,
                 args.simulations)
     curses.wrapper(run, game)
+    if args.sgf is not None and game.moves:
+        result = (margin_to_result(game.board.score())
+                  if game.board.is_terminal() else "Void")
+        names = {human: "human",
+                 goboard.opponent(human): args.checkpoint.stem}
+        save_sgf(args.sgf, game.moves, game.board.size, args.komi, result,
+                 black=names[Stone.BLACK], white=names[Stone.WHITE])
+        print(f"saved {args.sgf}")
 
 
 if __name__ == "__main__":
