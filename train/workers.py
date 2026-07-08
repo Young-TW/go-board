@@ -16,6 +16,7 @@ from train.batchplay import play_games
 
 def _worker_loop(device_id: int, net_kwargs: dict, in_queue, out_queue):
     import signal
+    import time
 
     from train.net import PolicyValueNet
     from train.selfplay import NetEvaluator
@@ -31,8 +32,20 @@ def _worker_loop(device_id: int, net_kwargs: dict, in_queue, out_queue):
     torch.set_num_threads(2)
     # Workers beyond the GPU count stack onto devices round-robin: the
     # C++ search is one thread per worker, and on big boards a single
-    # worker cannot feed a fast GPU by itself.
-    torch.cuda.set_device(device_id % torch.cuda.device_count())
+    # worker cannot feed a fast GPU by itself. Stagger and retry the
+    # context creation: 32 simultaneous CUDA inits on one node showed
+    # transient "invalid device ordinal" failures.
+    time.sleep(0.25 * device_id)
+    for attempt in range(10):
+        try:
+            torch.cuda.set_device(device_id % torch.cuda.device_count())
+            break
+        except Exception:
+            if attempt == 9:
+                out_queue.put(("error",
+                               f"worker {device_id}: CUDA init failed"))
+                return
+            time.sleep(2.0)
     net = PolicyValueNet(**net_kwargs)
     device = torch.device(
         f"cuda:{device_id % torch.cuda.device_count()}")
@@ -93,7 +106,9 @@ class SelfPlayWorkers:
         margins = []
         stats: dict = {}
         for _ in range(active):
-            status, payload = self.out_queue.get()
+            # Fail loudly if a worker died silently instead of hanging
+            # the whole job on an empty queue.
+            status, payload = self.out_queue.get(timeout=7200)
             if status == "error":
                 raise RuntimeError(f"self-play worker failed: {payload}")
             samples, worker_margins, worker_stats = payload
