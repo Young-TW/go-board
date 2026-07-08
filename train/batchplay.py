@@ -40,7 +40,7 @@ def play_games(evaluate_planes, n_games: int, board_size: int = 9,
                parallel: int | None = None, noise_fraction: float = 0.25,
                resign_threshold: float = 2.0,
                no_resign_fraction: float = 0.1,
-               komi_jitter: float = 0.0,
+               komi_jitter: float = 0.0, min_pass_moves: int = 0,
                rng: np.random.Generator | None = None,
                spectate_path: Path | None = None,
                spectate_every: int = 8):
@@ -62,7 +62,7 @@ def play_games(evaluate_planes, n_games: int, board_size: int = 9,
         noise_fraction=noise_fraction,
         resign_threshold=resign_threshold,
         no_resign_fraction=no_resign_fraction,
-        komi_jitter=komi_jitter,
+        komi_jitter=komi_jitter, min_pass_moves=min_pass_moves,
         seed=int(rng.integers(0, 2**63 - 1)))
 
     rounds = 0

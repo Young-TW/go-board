@@ -41,6 +41,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--resign-threshold", type=float, default=0.95,
                         help="side resigns below -threshold; >=1 disables")
     parser.add_argument("--no-resign-fraction", type=float, default=0.1)
+    parser.add_argument("--min-pass-moves", type=int, default=0,
+                        help="self-play searches exclude pass before this "
+                             "move number (guards the early pass-out "
+                             "equilibrium)")
     parser.add_argument("--komi-jitter", type=float, default=0.0,
                         help="randomize each self-play game's komi by "
                              "+/- this many points (half-point steps)")
@@ -300,6 +304,7 @@ def main() -> None:
                               else 2.0),
             no_resign_fraction=args.no_resign_fraction,
             komi_jitter=args.komi_jitter,
+            min_pass_moves=args.min_pass_moves,
             spectate_path=args.checkpoint_dir / "spectate.txt")
         if workers is not None:
             game_samples, margins, stats = workers.play(

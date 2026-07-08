@@ -28,7 +28,7 @@ LATEST=$(ls -t "$CKPT_DIR"/iter_*.pt 2>/dev/null | head -1)
 [ -n "$LATEST" ] && RESUME="--resume $LATEST"
 
 exec .venv/bin/python -m train.train \
-    --board-size 19 --komi 7.5 --komi-jitter 2.0 \
+    --board-size 19 --komi 7.5 --komi-jitter 2.0 --min-pass-moves 60 \
     --channels 128 --blocks 10 \
     --iterations 3000 \
     --games-per-iter 512 --parallel-games 96 \

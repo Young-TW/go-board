@@ -44,7 +44,8 @@ SelfPlayPool::SelfPlayPool(int n_games, int board_size, float komi,
                            int leaves_per_game, int parallel, float c_puct,
                            float dirichlet_alpha, float noise_fraction,
                            float resign_threshold, float no_resign_fraction,
-                           float komi_jitter, std::uint64_t seed)
+                           float komi_jitter, int min_pass_moves,
+                           std::uint64_t seed)
     : n_games_(n_games),
       board_size_(board_size),
       komi_(komi),
@@ -57,6 +58,7 @@ SelfPlayPool::SelfPlayPool(int n_games, int board_size, float komi,
       resign_threshold_(resign_threshold),
       no_resign_fraction_(no_resign_fraction),
       komi_jitter_(komi_jitter),
+      min_pass_moves_(min_pass_moves),
       search_(c_puct, dirichlet_alpha, noise_fraction, seed),
       rng_(seed + 1) {
     const int pool_size =
@@ -220,7 +222,7 @@ int SelfPlayPool::collect() {
             if (const CacheEntry* entry = cache_probe(key)) {
                 auto root = std::make_unique<Node>();
                 search_.expand(*root, game->board, game->to_play,
-                               entry->priors.data());
+                               entry->priors.data(), pass_allowed(*game));
                 if (game->full_search) {
                     search_.add_dirichlet_noise(*root);
                 }
@@ -231,7 +233,8 @@ int SelfPlayPool::collect() {
                     game->board.features(game->to_play);
                 features_.insert(features_.end(), f.begin(), f.end());
                 pending_.push_back(
-                    {game, {}, game->board, game->to_play, key});
+                    {game, {}, game->board, game->to_play, key,
+                     pass_allowed(*game)});
             }
         }
         // Early termination: once the visit lead of the best child
@@ -274,7 +277,8 @@ int SelfPlayPool::collect() {
                     Node* leaf = path.back();
                     if (!leaf->expanded()) {
                         search_.expand(*leaf, board, color,
-                                       entry->priors.data());
+                                       entry->priors.data(),
+                                       pass_allowed(*game));
                     }
                     Search::backprop(path, entry->value, 1);
                     continue;
@@ -286,7 +290,7 @@ int SelfPlayPool::collect() {
                 features_.insert(features_.end(), f.begin(), f.end());
                 pending_.push_back(
                     {nullptr, std::move(path), std::move(board), color,
-                     key});
+                     key, pass_allowed(*game)});
             }
         }
         i++;
@@ -303,7 +307,8 @@ void SelfPlayPool::submit(const float* priors, const float* values,
         cache_store(pending.cache_key, row, values[i]);
         if (pending.slot != nullptr) {  // root expansion
             auto root = std::make_unique<Node>();
-            search_.expand(*root, pending.board, pending.to_play, row);
+            search_.expand(*root, pending.board, pending.to_play, row,
+                           pending.allow_pass);
             if (pending.slot->full_search) {
                 search_.add_dirichlet_noise(*root);
             }
@@ -311,7 +316,8 @@ void SelfPlayPool::submit(const float* priors, const float* values,
         } else {
             Node* leaf = pending.path.back();
             if (!leaf->expanded()) {
-                search_.expand(*leaf, pending.board, pending.to_play, row);
+                search_.expand(*leaf, pending.board, pending.to_play,
+                               row, pending.allow_pass);
             }
             // Replace the virtual loss with the real value; the visit
             // was already counted.

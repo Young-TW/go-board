@@ -27,7 +27,7 @@ static void test_pool_plays_games_to_completion() {
                       /*noise_fraction=*/0.25f,
                       /*resign_threshold=*/2.0f,
                       /*no_resign_fraction=*/0.1f, /*komi_jitter=*/0.0f,
-                      /*seed=*/42);
+                      /*min_pass_moves=*/0, /*seed=*/42);
 
     int rounds = 0;
     while (!pool.done() && rounds < 200000) {

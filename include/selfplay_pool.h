@@ -56,12 +56,16 @@ public:
     // komi +/- jitter in half-point steps, so the net (fed komi as a
     // feature plane) learns the komi/initiative trade-off instead of
     // collapsing into a fixed-komi equilibrium.
+    // min_pass_moves > 0 removes the pass edge from searches before
+    // that move number, a self-play guard against the early pass-out
+    // equilibrium (both sides learning to end near-empty games).
     SelfPlayPool(int n_games, int board_size, float komi, int simulations,
                  int cheap_simulations, float full_search_prob,
                  int temperature_moves, int leaves_per_game, int parallel,
                  float c_puct, float dirichlet_alpha, float noise_fraction,
                  float resign_threshold, float no_resign_fraction,
-                 float komi_jitter, std::uint64_t seed);
+                 float komi_jitter, int min_pass_moves,
+                 std::uint64_t seed);
 
     bool done() const { return slots_.empty(); }
     int board_size() const { return board_size_; }
@@ -123,7 +127,12 @@ private:
         Board board;               // position that was evaluated
         Stone to_play;
         std::uint64_t cache_key;
+        bool allow_pass;
     };
+
+    bool pass_allowed(const GameSlot& game) const {
+        return game.move_count >= min_pass_moves_;
+    }
 
     struct CacheEntry {
         std::vector<float> priors;  // raw net output, pre-noise
@@ -155,6 +164,7 @@ private:
     float resign_threshold_;
     float no_resign_fraction_;
     float komi_jitter_;
+    int min_pass_moves_;
     int started_ = 0;
     int calibration_games_ = 0;
     int calibration_wrong_ = 0;

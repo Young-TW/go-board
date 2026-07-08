@@ -51,8 +51,11 @@ public:
 
     // Creates edges for every legal move using `priors` (an array of
     // size*size + 1 move probabilities), masked and renormalized.
+    // allow_pass=false omits the pass edge (self-play early-game
+    // guard against the pass-out equilibrium) unless passing is the
+    // only legal action.
     void expand(Node& node, const Board& board, Stone to_play,
-                const float* priors) const;
+                const float* priors, bool allow_pass = true) const;
 
     // `value` is from the perspective of the player to move at the
     // leaf; the sign flips at every step back up. visit_delta = 0

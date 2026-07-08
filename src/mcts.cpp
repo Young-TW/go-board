@@ -70,10 +70,12 @@ std::vector<Node*> Search::descend(Node& root, Board& board,
 }
 
 void Search::expand(Node& node, const Board& board, Stone to_play,
-                    const float* priors) const {
+                    const float* priors, bool allow_pass) const {
     const int points = board.size() * board.size();
     std::vector<int> legal = board.legal_moves(to_play);
-    legal.push_back(points);  // pass is always available
+    if (allow_pass || legal.empty()) {
+        legal.push_back(points);
+    }
 
     double total = 0.0;
     for (int move : legal) total += std::max(priors[move], 0.0f);
