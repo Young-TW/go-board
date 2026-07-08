@@ -17,13 +17,13 @@ import goboard
 from goboard import Board, Stone
 
 from train.mcts import MCTS, apply_move
-from train.net import PolicyValueNet, default_device
+from train.net import PolicyValueNet, default_device, load_checkpoint
 from train.selfplay import NetEvaluator
 from train.sgf import margin_to_result, save_sgf
 
 
 def load_evaluator(path: Path, device) -> tuple[NetEvaluator, dict]:
-    state = torch.load(path, map_location="cpu", weights_only=True)
+    state = load_checkpoint(path)
     config = state["config"]
     net = PolicyValueNet(config["board_size"], config["channels"],
                          config["blocks"],

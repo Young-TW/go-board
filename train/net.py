@@ -8,9 +8,25 @@ meaning pass. The value head predicts the side to play's expected
 outcome in [-1, 1].
 """
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
+
+
+def load_checkpoint(path):
+    """torch.load for our own checkpoints. Some were saved with a
+    numpy scalar in the optimizer state (a cosine-lr bug), which the
+    weights_only unpickler rejects; allowlist it on retry since these
+    files are ours."""
+    try:
+        return torch.load(path, map_location="cpu", weights_only=True)
+    except Exception:
+        with torch.serialization.safe_globals(
+                [np._core.multiarray.scalar, np.dtype,
+                 np.dtypes.Float64DType]):
+            return torch.load(path, map_location="cpu",
+                              weights_only=True)
 
 
 def default_device() -> torch.device:

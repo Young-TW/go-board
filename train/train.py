@@ -19,7 +19,7 @@ import goboard
 from goboard import Board, Stone
 
 from train.batchplay import play_games
-from train.net import PolicyValueNet, default_device
+from train.net import PolicyValueNet, default_device, load_checkpoint
 from train.selfplay import NetEvaluator, symmetries
 
 
@@ -190,7 +190,7 @@ def main() -> None:
     start_iter = 0
     in_planes = goboard.FEATURE_PLANES
     if args.resume is not None:
-        state = torch.load(args.resume, map_location="cpu", weights_only=True)
+        state = load_checkpoint(args.resume)
         in_planes = state["config"].get("in_planes", 3)
         start_iter = state["iteration"] + 1
     net = PolicyValueNet(args.board_size, args.channels, args.blocks,
@@ -240,9 +240,11 @@ def main() -> None:
         # Cosine decay from --lr to its floor across the whole run;
         # recomputed from the iteration number, so it is resume-safe.
         progress = iteration / max(1, args.iterations - 1)
-        lr = args.lr * (args.lr_min_factor
-                        + (1 - args.lr_min_factor)
-                        * 0.5 * (1 + np.cos(np.pi * progress)))
+        # float(): a numpy scalar here leaks into the optimizer state
+        # and poisons the checkpoint for weights_only torch.load.
+        lr = float(args.lr * (args.lr_min_factor
+                              + (1 - args.lr_min_factor)
+                              * 0.5 * (1 + np.cos(np.pi * progress))))
         for group in optimizer.param_groups:
             group["lr"] = lr
 
