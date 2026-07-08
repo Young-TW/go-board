@@ -164,6 +164,11 @@ def run(stdscr, directory: Path, interval: float) -> None:
                             chart_w - 6, chart_h, color=2)
 
         offset = 2 + max(4 + len(board), v_top + chart_h + 1)
+        elo_lines = read_log_tail(directory / "elo.log", limit=2) \
+            if (directory / "elo.log").exists() else []
+        for i, line in enumerate(elo_lines):
+            put(offset + i, 0, line[:curses.COLS - 1], curses.A_DIM)
+        offset += len(elo_lines) + (1 if elo_lines else 0)
         put(offset, 0, "train.log", curses.A_BOLD)
         for i, line in enumerate(read_log_tail(log)):
             put(offset + 1 + i, 0, line[:curses.COLS - 1])
