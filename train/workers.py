@@ -21,10 +21,14 @@ def _worker_loop(device_id: int, net_kwargs: dict, in_queue, out_queue):
     # Inference runs on the GPU; a fat default OMP pool per worker
     # just thrashes the job's CPU allocation (observed: 8 H200s at 2%).
     torch.set_num_threads(2)
-    torch.cuda.set_device(device_id)
+    # Workers beyond the GPU count stack onto devices round-robin: the
+    # C++ search is one thread per worker, and on big boards a single
+    # worker cannot feed a fast GPU by itself.
+    torch.cuda.set_device(device_id % torch.cuda.device_count())
     net = PolicyValueNet(**net_kwargs)
-    evaluator = NetEvaluator(net, torch.device(f"cuda:{device_id}"),
-                             compile=True)
+    device = torch.device(
+        f"cuda:{device_id % torch.cuda.device_count()}")
+    evaluator = NetEvaluator(net, device, compile=True)
     while True:
         message = in_queue.get()
         if message is None:

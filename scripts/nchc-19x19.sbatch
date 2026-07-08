@@ -35,11 +35,11 @@ exec .venv/bin/python -m train.train \
     --board-size 19 --komi 7.5 --komi-jitter 2.0 --min-pass-moves 60 \
     --channels 128 --blocks 10 \
     --iterations 3000 \
-    --games-per-iter 512 --parallel-games 96 \
+    --games-per-iter 1024 --parallel-games 32 \
     --simulations 600 --cheap-simulations 100 --full-search-prob 0.25 \
     --temperature-moves 30 --noise-fraction 0.3 \
-    --steps-per-iter 1000 --batch-size 512 \
-    --buffer-size 1500000 \
-    --workers 8 \
+    --steps-per-iter 1600 --batch-size 512 \
+    --buffer-size 2000000 \
+    --workers 32 \
     --checkpoint-dir "$CKPT_DIR" \
     $RESUME
