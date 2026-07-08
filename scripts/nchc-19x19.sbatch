@@ -13,12 +13,14 @@
 #SBATCH -N 1
 #SBATCH --gres=gpu:8
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=32
+#SBATCH --cpus-per-task=64
 #SBATCH -t 2-00:00:00
 #SBATCH --signal=TERM@600
 #SBATCH -o slurm-%j.out
 
 cd /work/young0nchc/go-board
+
+export OMP_NUM_THREADS=4  # per process; workers also cap themselves
 
 CKPT_DIR=checkpoints-19
 RESUME=""

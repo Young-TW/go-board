@@ -18,6 +18,9 @@ def _worker_loop(device_id: int, net_kwargs: dict, in_queue, out_queue):
     from train.net import PolicyValueNet
     from train.selfplay import NetEvaluator
 
+    # Inference runs on the GPU; a fat default OMP pool per worker
+    # just thrashes the job's CPU allocation (observed: 8 H200s at 2%).
+    torch.set_num_threads(2)
     torch.cuda.set_device(device_id)
     net = PolicyValueNet(**net_kwargs)
     evaluator = NetEvaluator(net, torch.device(f"cuda:{device_id}"),
