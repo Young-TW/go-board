@@ -50,6 +50,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--parallel-games", type=int, default=None)
     parser.add_argument("--no-compile", action="store_true",
                         help="disable torch.compile for self-play inference")
+    parser.add_argument("--workers", type=int, default=0,
+                        help="self-play worker processes, one per GPU "
+                             "(0 = single-process on the training GPU)")
     parser.add_argument("--buffer-size", type=int, default=600_000)
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--steps-per-iter", type=int, default=600)
@@ -257,6 +260,13 @@ def main() -> None:
             print(f"restored replay buffer ({len(buffer)} samples)",
                   flush=True)
     evaluator = NetEvaluator(net, device, compile=not args.no_compile)
+    workers = None
+    if args.workers > 0:
+        from train.workers import SelfPlayWorkers
+        workers = SelfPlayWorkers(
+            args.workers,
+            dict(board_size=args.board_size, channels=args.channels,
+                 blocks=args.blocks, in_planes=net.in_planes))
 
     signal.signal(signal.SIGTERM, _request_stop)
     signal.signal(signal.SIGINT, _request_stop)
@@ -277,8 +287,7 @@ def main() -> None:
 
         start = time.time()
         net.eval()  # train_steps leaves the net in train mode
-        game_samples, margins, stats = play_games(
-            evaluator.evaluate_planes, args.games_per_iter,
+        play_kwargs = dict(
             board_size=args.board_size, komi=args.komi,
             simulations=args.simulations,
             cheap_simulations=args.cheap_simulations,
@@ -290,8 +299,15 @@ def main() -> None:
             resign_threshold=(args.resign_threshold if resign_active
                               else 2.0),
             no_resign_fraction=args.no_resign_fraction,
-            komi_jitter=args.komi_jitter, rng=rng,
+            komi_jitter=args.komi_jitter,
             spectate_path=args.checkpoint_dir / "spectate.txt")
+        if workers is not None:
+            game_samples, margins, stats = workers.play(
+                net, args.games_per_iter, play_kwargs, rng)
+        else:
+            game_samples, margins, stats = play_games(
+                evaluator.evaluate_planes, args.games_per_iter,
+                rng=rng, **play_kwargs)
         calibration_window.append(
             (stats["resign_false_positives"],
              stats["resign_calibration_games"]))
@@ -360,6 +376,8 @@ def main() -> None:
         if STOP_REQUESTED:
             break
 
+    if workers is not None:
+        workers.close()
     save_buffer(buffer, buffer_path)
     print(f"saved replay buffer ({len(buffer)} samples); resume with "
           f"--resume {checkpoint}", flush=True)
