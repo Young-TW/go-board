@@ -41,6 +41,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--resign-threshold", type=float, default=0.95,
                         help="side resigns below -threshold; >=1 disables")
     parser.add_argument("--no-resign-fraction", type=float, default=0.1)
+    parser.add_argument("--dynamic-komi", action="store_true",
+                        help="track the average scored margin with an EMA "
+                             "and use it as the self-play base komi, so "
+                             "one-sided phases keep producing 50/50 "
+                             "outcome labels")
     parser.add_argument("--min-pass-moves", type=int, default=0,
                         help="self-play searches exclude pass before this "
                              "move number (guards the early pass-out "
@@ -284,6 +289,10 @@ def main() -> None:
 
     checkpoint = args.resume
     resign_active = False
+    # Dynamic komi curriculum state; restored on resume.
+    komi_ema = args.komi
+    if state is not None and "komi_ema" in state:
+        komi_ema = state["komi_ema"]
     for iteration in range(start_iter, args.iterations):
         # Cosine decay from --lr to its floor across the whole run;
         # recomputed from the iteration number, so it is resume-safe.
@@ -298,8 +307,12 @@ def main() -> None:
 
         start = time.time()
         net.eval()  # train_steps leaves the net in train mode
+        komi_base = args.komi
+        if args.dynamic_komi:
+            # Round to a half point; never below the real komi.
+            komi_base = max(args.komi, round(komi_ema * 2) / 2)
         play_kwargs = dict(
-            board_size=args.board_size, komi=args.komi,
+            board_size=args.board_size, komi=komi_base,
             simulations=args.simulations,
             cheap_simulations=args.cheap_simulations,
             full_search_prob=args.full_search_prob,
@@ -339,6 +352,13 @@ def main() -> None:
                          and v_empty < 0.6)
         black_wins = sum(margin > 0 for margin in margins)
         moves = sum(len(samples) for samples in game_samples)
+        # Update the margin EMA from scored games only. margins are
+        # komi-adjusted; add back this iteration's komi to estimate the
+        # raw board margin the next komi should compensate.
+        scored = [margin + komi_base for margin in margins
+                  if abs(margin) < 10000.0]
+        if args.dynamic_komi and scored:
+            komi_ema = 0.8 * komi_ema + 0.2 * float(np.mean(scored))
         for samples in game_samples:
             for sample in samples:
                 buffer.append((sample.planes, sample.pi, sample.z,
@@ -359,6 +379,7 @@ def main() -> None:
             "model": net.state_dict(),
             "optimizer": optimizer.state_dict(),
             "iteration": iteration,
+            "komi_ema": float(komi_ema),
             "config": vars(args) | {"checkpoint_dir": str(args.checkpoint_dir),
                                     "resume": None,
                                     "in_planes": net.in_planes,
@@ -375,7 +396,7 @@ def main() -> None:
                 f"fp {stats['resign_false_positives']}"
                 f"/{stats['resign_calibration_games']} | "
                 f"cache {stats['eval_cache_hits'] / max(1, stats['eval_cache_lookups']):.0%} | "
-                f"lr {lr:.1e} | "
+                f"komi {komi_base:.1f} | lr {lr:.1e} | "
                 f"selfplay {selfplay_time:5.1f}s train {train_time:5.1f}s")
         print(line, flush=True)
         # Restart-proof history: stdout redirection truncates on every
