@@ -142,3 +142,7 @@ board.is_terminal();               // two consecutive passes
 board.score();                     // black's margin, komi included
 board.hash();                      // Zobrist hash of the position
 ```
+
+## License
+
+[AGPL-3.0-or-later](LICENSE).

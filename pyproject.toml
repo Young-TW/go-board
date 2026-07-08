@@ -7,6 +7,8 @@ name = "goboard"
 version = "0.1.0"
 description = "Go rules engine with AlphaZero-style self-play training"
 readme = "README.md"
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE"]
 requires-python = ">=3.13"
 dependencies = ["numpy>=2"]
 
