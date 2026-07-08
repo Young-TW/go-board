@@ -20,7 +20,7 @@ from goboard import Board, Stone
 
 from train.batchplay import play_games
 from train.net import PolicyValueNet, default_device, load_checkpoint
-from train.selfplay import NetEvaluator, symmetries
+from train.selfplay import NetEvaluator, apply_random_symmetries
 
 
 def parse_args() -> argparse.Namespace:
@@ -144,11 +144,18 @@ def train_steps(net, buffer, optimizer, device, batch_size, steps,
     ownership_losses = []
     for _ in range(steps):
         indices = rng.choice(len(buffer), size=batch_size)
+        raw_planes = np.stack([buffer[i][0]
+                               for i in indices])[:, :net.in_planes]
+        raw_pi = np.stack([buffer[i][1] for i in indices])
+        raw_own = np.stack([buffer[i][4] for i in indices])
+        # Train-time augmentation: the buffer holds each position
+        # once; every draw gets an independent dihedral transform.
+        sym_planes, sym_pi, sym_own = apply_random_symmetries(
+            raw_planes, raw_pi, raw_own, rng)
         planes = torch.from_numpy(
-            np.stack([buffer[i][0]
-                      for i in indices])[:, :net.in_planes]).to(device)
+            np.ascontiguousarray(sym_planes)).to(device)
         target_pi = torch.from_numpy(
-            np.stack([buffer[i][1] for i in indices])).to(device)
+            np.ascontiguousarray(sym_pi)).to(device)
         target_z = torch.tensor(
             [buffer[i][2] for i in indices], dtype=torch.float32,
             device=device)
@@ -156,7 +163,7 @@ def train_steps(net, buffer, optimizer, device, batch_size, steps,
         w_pi = torch.tensor([buffer[i][3] for i in indices],
                             dtype=torch.float32, device=device)
         target_own = torch.from_numpy(
-            np.stack([buffer[i][4] for i in indices])).to(device)
+            np.ascontiguousarray(sym_own)).to(device)
         target_score = torch.tensor(
             [buffer[i][5] for i in indices], dtype=torch.float32,
             device=device) / net.board_size
@@ -334,11 +341,9 @@ def main() -> None:
         moves = sum(len(samples) for samples in game_samples)
         for samples in game_samples:
             for sample in samples:
-                for planes, pi, ownership in symmetries(
-                        sample.planes, sample.pi, args.board_size,
-                        sample.ownership):
-                    buffer.append((planes, pi, sample.z, sample.train_pi,
-                                   ownership, sample.score, sample.w_own))
+                buffer.append((sample.planes, sample.pi, sample.z,
+                               sample.train_pi, sample.ownership,
+                               sample.score, sample.w_own))
         selfplay_time = time.time() - start
 
         mark_spectate_training(args.checkpoint_dir / "spectate.txt",

@@ -27,6 +27,30 @@ def test_play_game_produces_consistent_samples():
         assert sample.z == expected
 
 
+def test_apply_random_symmetries_batch():
+    from train.selfplay import apply_random_symmetries
+
+    rng = np.random.default_rng(2)
+    planes = rng.random((16, 3, 5, 5)).astype(np.float32)
+    pi = rng.random((16, 26)).astype(np.float32)
+    ownership = rng.random((16, 25)).astype(np.float32)
+
+    out_planes, out_pi, out_own = apply_random_symmetries(
+        planes, pi, ownership, rng)
+    assert out_planes.shape == planes.shape
+    assert out_pi.shape == pi.shape
+    assert out_own.shape == ownership.shape
+    for i in range(16):
+        # Each sample keeps its multiset of values and its pass prob.
+        assert np.allclose(sorted(out_pi[i, :-1]), sorted(pi[i, :-1]),
+                           atol=1e-6)
+        assert out_pi[i, -1] == pi[i, -1]
+        assert np.allclose(sorted(out_own[i]), sorted(ownership[i]),
+                           atol=1e-6)
+    # With 16 samples over 8 transforms, at least one differs.
+    assert not np.array_equal(out_planes, planes)
+
+
 def test_symmetries_preserve_content():
     rng = np.random.default_rng(1)
     planes = rng.random((3, 5, 5)).astype(np.float32)

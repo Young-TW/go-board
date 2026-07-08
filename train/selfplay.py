@@ -143,6 +143,41 @@ def play_game(evaluate, board_size: int = 9, komi: float = 7.5,
     return samples, black_margin
 
 
+def apply_random_symmetries(planes: np.ndarray, pi: np.ndarray,
+                            ownership: np.ndarray,
+                            rng: np.random.Generator):
+    """Apply an independent random dihedral transform to every sample
+    of a training batch (KataGo-style train-time augmentation, so the
+    replay buffer holds each position once instead of eight times).
+
+    planes: (N, C, n, n); pi: (N, n*n + 1); ownership: (N, n*n).
+    Returns transformed copies.
+    """
+    count, _, size, _ = planes.shape
+    out_planes = np.empty_like(planes)
+    out_pi = pi.copy()
+    out_own = np.empty_like(ownership)
+    board_pi = pi[:, :-1].reshape(count, size, size)
+    own = ownership.reshape(count, size, size)
+    transform = rng.integers(0, 8, size=count)
+    for code in range(8):
+        mask = transform == code
+        if not mask.any():
+            continue
+        k, flip = code % 4, code >= 4
+        p = np.rot90(planes[mask], k, axes=(2, 3))
+        b = np.rot90(board_pi[mask], k, axes=(1, 2))
+        o = np.rot90(own[mask], k, axes=(1, 2))
+        if flip:
+            p = np.flip(p, axis=3)
+            b = np.flip(b, axis=2)
+            o = np.flip(o, axis=2)
+        out_planes[mask] = p
+        out_pi[mask, :-1] = b.reshape(mask.sum(), -1)
+        out_own[mask] = o.reshape(mask.sum(), -1)
+    return out_planes, out_pi, out_own
+
+
 def symmetries(planes: np.ndarray, pi: np.ndarray, board_size: int,
                ownership: np.ndarray | None = None):
     """Yield the 8 dihedral transforms of (planes, pi[, ownership])."""
