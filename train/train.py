@@ -41,6 +41,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--resign-threshold", type=float, default=0.95,
                         help="side resigns below -threshold; >=1 disables")
     parser.add_argument("--no-resign-fraction", type=float, default=0.1)
+    parser.add_argument("--komi-jitter", type=float, default=0.0,
+                        help="randomize each self-play game's komi by "
+                             "+/- this many points (half-point steps)")
     parser.add_argument("--resign-fp-limit", type=float, default=0.05,
                         help="enable resignation only while the measured "
                              "false-positive rate stays below this")
@@ -191,8 +194,19 @@ def main() -> None:
     in_planes = goboard.FEATURE_PLANES
     if args.resume is not None:
         state = load_checkpoint(args.resume)
-        in_planes = state["config"].get("in_planes", 3)
         start_iter = state["iteration"] + 1
+        ckpt_planes = state["config"].get("in_planes", 3)
+        if ckpt_planes != in_planes:
+            # Upgrade across feature-plane growth: copy the stem
+            # kernels for the old planes and zero-init the new ones,
+            # so the upgraded net starts out functionally identical.
+            old = state["model"]["stem.0.weight"]
+            new = torch.zeros(old.shape[0], in_planes, *old.shape[2:])
+            new[:, :ckpt_planes] = old
+            state["model"]["stem.0.weight"] = new
+            print(f"upgraded stem from {ckpt_planes} to {in_planes} "
+                  "feature planes (new planes zero-initialized)",
+                  flush=True)
     net = PolicyValueNet(args.board_size, args.channels, args.blocks,
                          in_planes)
     if state is not None:
@@ -262,7 +276,8 @@ def main() -> None:
             noise_fraction=args.noise_fraction,
             resign_threshold=(args.resign_threshold if resign_active
                               else 2.0),
-            no_resign_fraction=args.no_resign_fraction, rng=rng,
+            no_resign_fraction=args.no_resign_fraction,
+            komi_jitter=args.komi_jitter, rng=rng,
             spectate_path=args.checkpoint_dir / "spectate.txt")
         calibration_window.append(
             (stats["resign_false_positives"],

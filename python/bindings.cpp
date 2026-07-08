@@ -59,7 +59,8 @@ PYBIND11_MODULE(goboard, m) {
                              "selfplay_pool.h for the collect/submit "
                              "protocol.")
         .def(py::init<int, int, float, int, int, float, int, int, int,
-                      float, float, float, float, float, std::uint64_t>(),
+                      float, float, float, float, float, float,
+                      std::uint64_t>(),
              py::arg("n_games"), py::arg("board_size") = 9,
              py::arg("komi") = 7.5f, py::arg("simulations") = 128,
              py::arg("cheap_simulations") = 128,
@@ -70,7 +71,8 @@ PYBIND11_MODULE(goboard, m) {
              py::arg("c_puct") = 1.5f, py::arg("dirichlet_alpha") = 0.3f,
              py::arg("noise_fraction") = 0.25f,
              py::arg("resign_threshold") = 2.0f,  // >= 1 disables
-             py::arg("no_resign_fraction") = 0.1f, py::arg("seed") = 0)
+             py::arg("no_resign_fraction") = 0.1f,
+             py::arg("komi_jitter") = 0.0f, py::arg("seed") = 0)
         .def("resign_calibration_games",
              &SelfPlayPool::resign_calibration_games)
         .def("resign_false_positives",

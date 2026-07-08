@@ -52,12 +52,16 @@ public:
     // full-search moves. A side whose root value drops below
     // -resign_threshold resigns (>= 1 disables); a no_resign_fraction
     // of games always plays to the end to calibrate false positives.
+    // komi_jitter > 0 randomizes each game's komi to
+    // komi +/- jitter in half-point steps, so the net (fed komi as a
+    // feature plane) learns the komi/initiative trade-off instead of
+    // collapsing into a fixed-komi equilibrium.
     SelfPlayPool(int n_games, int board_size, float komi, int simulations,
                  int cheap_simulations, float full_search_prob,
                  int temperature_moves, int leaves_per_game, int parallel,
                  float c_puct, float dirichlet_alpha, float noise_fraction,
                  float resign_threshold, float no_resign_fraction,
-                 std::uint64_t seed);
+                 float komi_jitter, std::uint64_t seed);
 
     bool done() const { return slots_.empty(); }
     int board_size() const { return board_size_; }
@@ -127,6 +131,7 @@ private:
     };
 
     std::unique_ptr<GameSlot> new_game();
+    float draw_komi();
     void begin_move(GameSlot& game);
     void play_move(GameSlot& game);
     // Returns true when the game ended by resignation.
@@ -149,6 +154,7 @@ private:
 
     float resign_threshold_;
     float no_resign_fraction_;
+    float komi_jitter_;
     int started_ = 0;
     int calibration_games_ = 0;
     int calibration_wrong_ = 0;

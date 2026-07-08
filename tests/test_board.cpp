@@ -238,6 +238,11 @@ static void test_features_planes() {
     CHECK(white_view[points + 1 * 5 + 1] == 1.0f);  // opponent stone
     CHECK(white_view[2 * points] == 0.0f);          // white to play
     CHECK(white_view[3 * points + 0] == 1.0f);      // own atari at (0,0)
+
+    // Komi plane: white receives the komi, black gives it.
+    Board komi_board(5, 7.5f);
+    CHECK(komi_board.features(W)[7 * points] == 0.5f);   // +7.5 / 15
+    CHECK(komi_board.features(B)[7 * points] == -0.5f);
 }
 
 int main() {

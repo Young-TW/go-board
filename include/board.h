@@ -43,13 +43,17 @@ public:
     std::vector<int> legal_moves(Stone color) const;
 
     // Number of feature planes emitted by features().
-    static constexpr int kFeaturePlanes = 7;
+    static constexpr int kFeaturePlanes = 8;
 
     // Neural-net input: kFeaturePlanes planes of size*size floats,
     // plane-major. 0: own stones, 1: opponent stones, 2: constant 1.0
     // if black to play, 3/4: own/opponent chains in atari, 5/6:
-    // own/opponent chains with exactly two liberties.
+    // own/opponent chains with exactly two liberties, 7: komi from
+    // the side to play's perspective, scaled by 1/15 (positive means
+    // the mover receives the komi).
     std::vector<float> features(Stone to_play) const;
+
+    float komi() const { return komi_; }
 
     std::string to_string() const;
 

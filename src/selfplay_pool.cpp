@@ -1,6 +1,7 @@
 #include "selfplay_pool.h"
 
 #include <algorithm>
+#include <cstring>
 #include <utility>
 
 namespace {
@@ -10,8 +11,14 @@ constexpr std::uint64_t kWhiteToPlayKey = 0x517CC1B727220A95ULL;
 }
 
 std::uint64_t SelfPlayPool::cache_key(const Board& board, Stone to_play) {
+    // Komi is a feature plane, so positions at different komi have
+    // different evaluations and must not share cache entries.
+    std::uint32_t komi_bits;
+    const float komi = board.komi();
+    std::memcpy(&komi_bits, &komi, sizeof(komi_bits));
     return board.hash() ^
-           (to_play == Stone::Black ? kBlackToPlayKey : kWhiteToPlayKey);
+           (to_play == Stone::Black ? kBlackToPlayKey : kWhiteToPlayKey) ^
+           (std::uint64_t(komi_bits) * 0x9E3779B97F4A7C15ULL);
 }
 
 const SelfPlayPool::CacheEntry* SelfPlayPool::cache_probe(
@@ -37,7 +44,7 @@ SelfPlayPool::SelfPlayPool(int n_games, int board_size, float komi,
                            int leaves_per_game, int parallel, float c_puct,
                            float dirichlet_alpha, float noise_fraction,
                            float resign_threshold, float no_resign_fraction,
-                           std::uint64_t seed)
+                           float komi_jitter, std::uint64_t seed)
     : n_games_(n_games),
       board_size_(board_size),
       komi_(komi),
@@ -49,6 +56,7 @@ SelfPlayPool::SelfPlayPool(int n_games, int board_size, float komi,
       max_moves_(board_size * board_size * 2),
       resign_threshold_(resign_threshold),
       no_resign_fraction_(no_resign_fraction),
+      komi_jitter_(komi_jitter),
       search_(c_puct, dirichlet_alpha, noise_fraction, seed),
       rng_(seed + 1) {
     const int pool_size =
@@ -56,9 +64,16 @@ SelfPlayPool::SelfPlayPool(int n_games, int board_size, float komi,
     for (int i = 0; i < pool_size; i++) slots_.push_back(new_game());
 }
 
+float SelfPlayPool::draw_komi() {
+    if (komi_jitter_ <= 0) return komi_;
+    const int steps = int(komi_jitter_ * 2);  // half-point increments
+    std::uniform_int_distribution<int> offset(-steps, steps);
+    return komi_ + 0.5f * offset(rng_);
+}
+
 std::unique_ptr<SelfPlayPool::GameSlot> SelfPlayPool::new_game() {
     started_++;
-    auto game = std::make_unique<GameSlot>(board_size_, komi_);
+    auto game = std::make_unique<GameSlot>(board_size_, draw_komi());
     std::uniform_real_distribution<double> uniform(0.0, 1.0);
     game->allow_resign = uniform(rng_) >= no_resign_fraction_;
     begin_move(*game);

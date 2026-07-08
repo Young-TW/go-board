@@ -222,6 +222,11 @@ std::vector<float> Board::features(Stone to_play) const {
     if (to_play == Stone::Black) {
         for (int i = 0; i < points; i++) planes[2 * points + i] = 1.0f;
     }
+    const float self_komi =
+        (to_play == Stone::White ? komi_ : -komi_) / 15.0f;
+    for (int i = 0; i < points; i++) {
+        planes[7 * points + i] = self_komi;
+    }
     return planes;
 }
 
