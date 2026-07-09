@@ -352,16 +352,16 @@ def main() -> None:
                          and v_empty < 0.6)
         black_wins = sum(margin > 0 for margin in margins)
         moves = sum(len(samples) for samples in game_samples)
-        # Track the raw board margin from scored games only (margins
-        # are komi-adjusted; add this iteration's komi back). The
-        # median is by definition the komi that splits outcomes 50/50;
-        # the mean lagged badly when the leader's margin kept growing
-        # (observed: black climbed back to 78% wins while a mean-EMA
-        # chased 10+ points behind).
-        scored = [margin + komi_base for margin in margins
-                  if abs(margin) < 10000.0]
-        if args.dynamic_komi and scored:
-            komi_ema = 0.5 * komi_ema + 0.5 * float(np.median(scored))
+        # Integral control on the WIN RATE. Margin-based tracking
+        # (mean or median) fails against a win-rate-optimizing agent:
+        # once safely ahead it converts to a margin just above the
+        # komi, so measured margins follow the komi instead of the
+        # true gap (observed: komi drifting 42->24 while black rose
+        # to 94%). The win rate cannot be gamed that way.
+        if args.dynamic_komi and margins:
+            black_rate = sum(m > 0 for m in margins) / len(margins)
+            komi_ema += float(np.clip(24 * (black_rate - 0.5), -6, 6))
+            komi_ema = max(args.komi, komi_ema)
         for samples in game_samples:
             for sample in samples:
                 buffer.append((sample.planes, sample.pi, sample.z,
