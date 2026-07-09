@@ -352,13 +352,16 @@ def main() -> None:
                          and v_empty < 0.6)
         black_wins = sum(margin > 0 for margin in margins)
         moves = sum(len(samples) for samples in game_samples)
-        # Update the margin EMA from scored games only. margins are
-        # komi-adjusted; add back this iteration's komi to estimate the
-        # raw board margin the next komi should compensate.
+        # Track the raw board margin from scored games only (margins
+        # are komi-adjusted; add this iteration's komi back). The
+        # median is by definition the komi that splits outcomes 50/50;
+        # the mean lagged badly when the leader's margin kept growing
+        # (observed: black climbed back to 78% wins while a mean-EMA
+        # chased 10+ points behind).
         scored = [margin + komi_base for margin in margins
                   if abs(margin) < 10000.0]
         if args.dynamic_komi and scored:
-            komi_ema = 0.8 * komi_ema + 0.2 * float(np.mean(scored))
+            komi_ema = 0.5 * komi_ema + 0.5 * float(np.median(scored))
         for samples in game_samples:
             for sample in samples:
                 buffer.append((sample.planes, sample.pi, sample.z,
